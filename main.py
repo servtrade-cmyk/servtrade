@@ -875,6 +875,132 @@ class AccumulationAnalyzer:
         
         return result
 
+    # ============== ОПОВЕЩЕНИЙ О ЩИТКОИНАХ (ДИСКАВЕРИ) ==============
+    def _find_swing_highs(self, df: pd.DataFrame, window: int = 5) -> List[Dict]:
+        """Поиск локальных максимумов (свингов)"""
+        highs = []
+        for i in range(window, len(df) - window):
+            if all(df['high'].iloc[i] > df['high'].iloc[j] for j in range(i - window, i + window + 1) if j != i):
+                highs.append({'idx': i, 'price': df['high'].iloc[i]})
+        return highs
+
+    def _find_swing_lows(self, df: pd.DataFrame, window: int = 5) -> List[Dict]:
+        """Поиск локальных минимумов (свингов)"""
+        lows = []
+        for i in range(window, len(df) - window):
+            if all(df['low'].iloc[i] < df['low'].iloc[j] for j in range(i - window, i + window + 1) if j != i):
+                lows.append({'idx': i, 'price': df['low'].iloc[i]})
+        return lows
+
+    def detect_discovery_phase(self, df: pd.DataFrame, tf_name: str = 'daily') -> Dict:
+        """
+        Обнаружение зоны дискавери (пробитие исторических уровней)
+        """
+        result = {
+            'has_discovery': False,
+            'direction': None,
+            'strength': 0,
+            'description': ''
+        }
+        
+        # Находим локальные экстремумы
+        highs = self._find_swing_highs(df)
+        lows = self._find_swing_lows(df)
+        
+        if len(highs) < 2 and len(lows) < 2:
+            return result
+        
+        current_price = df['close'].iloc[-1]
+        
+        # 1. Пробитие предыдущего максимума (HH)
+        if len(highs) >= 2:
+            last_high = highs[-1]['price']
+            prev_high = highs[-2]['price']
+            
+            if current_price > last_high and last_high > prev_high:
+                result['has_discovery'] = True
+                result['direction'] = 'LONG'
+                result['strength'] = 85
+                result['description'] = f"🚀 ДИСКАВЕРИ на {tf_name}: пробитие HH {last_high:.6f} → {current_price:.6f}"
+                return result
+        
+        # 2. Пробитие предыдущего минимума (LL) для SHORT
+        if len(lows) >= 2:
+            last_low = lows[-1]['price']
+            prev_low = lows[-2]['price']
+            
+            if current_price < last_low and last_low < prev_low:
+                result['has_discovery'] = True
+                result['direction'] = 'SHORT'
+                result['strength'] = 85
+                result['description'] = f"🚀 ДИСКАВЕРИ на {tf_name}: пробитие LL {last_low:.6f} → {current_price:.6f}"
+                return result
+        
+        # 3. CHoCH (смена тренда) вверх
+        if len(highs) >= 2 and len(lows) >= 2:
+            last_high = highs[-1]['price']
+            prev_high = highs[-2]['price']
+            last_low = lows[-1]['price']
+            prev_low = lows[-2]['price']
+            
+            if current_price > prev_high and last_high < prev_high:
+                result['has_discovery'] = True
+                result['direction'] = 'LONG'
+                result['strength'] = 90
+                result['description'] = f"🔄 CHoCH на {tf_name}: смена тренда вверх"
+                return result
+            
+            elif current_price < prev_low and last_low > prev_low:
+                result['has_discovery'] = True
+                result['direction'] = 'SHORT'
+                result['strength'] = 90
+                result['description'] = f"🔄 CHoCH на {tf_name}: смена тренда вниз"
+                return result
+        
+        return result
+
+    def detect_big_move_preparation(self, df: pd.DataFrame, tf_name: str = 'daily') -> Dict:
+        """
+        Обнаружение подготовки к большому движению (дискавери + объемы + сжатие)
+        """
+        result = {
+            'has_signal': False,
+            'strength': 0,
+            'reasons': [],
+            'direction': None
+        }
+        
+        # 1. Дискавери / CHoCH
+        discovery = self.detect_discovery_phase(df, tf_name)
+        if discovery['has_discovery']:
+            result['has_signal'] = True
+            result['strength'] += discovery['strength']
+            result['reasons'].append(discovery['description'])
+            result['direction'] = discovery['direction']
+        
+        # 2. Аномальный объем
+        volume_spike = self.detect_volume_spikes_in_range(df)
+        if volume_spike.get('accumulation'):
+            result['has_signal'] = True
+            result['strength'] += volume_spike.get('strength', 0)
+            result['reasons'].append(volume_spike['description'])
+        
+        # 3. Рост объемов
+        volume_growth = self.detect_volume_growth(df)
+        if volume_growth.get('volume_growth'):
+            result['has_signal'] = True
+            result['strength'] += volume_growth.get('growth_pct', 0)
+            result['reasons'].append(volume_growth['description'])
+        
+        # 4. Сжатие волатильности
+        compression = self.detect_compression(df)
+        if compression.get('compression'):
+            result['has_signal'] = True
+            result['strength'] += compression.get('strength', 0)
+            result['reasons'].append(compression['description'])
+        
+        return result
+
 # ============== АНАЛИЗАТОР ТРЕНДОВЫХ ЛИНИЙ ==============
 
 class TrendLineAnalyzer:
@@ -8499,6 +8625,37 @@ class MultiExchangeScannerBot:
                     
                     logger.info(f"  📊 Метаданные: funding={funding}, volume={ticker.get('volume_24h')}")
                     
+                    # ===== ОПОВЕЩЕНИЕ О ЩИТКОИНАХ (ДИСКАВЕРИ/ПОДГОТОВКА) =====
+                    from config import SHITCOIN_ALERT_SETTINGS
+                    
+                    if SHITCOIN_ALERT_SETTINGS.get('enabled', True):
+                        try:
+                            volume_24h = ticker.get('volume_24h', 0)
+                            max_volume = SHITCOIN_ALERT_SETTINGS.get('max_volume_usdt', 10_000_000)
+                            
+                            if volume_24h < max_volume:  # щиткоин
+                                if 'daily' in dataframes and dataframes['daily'] is not None:
+                                    df_daily = dataframes['daily']
+                                    alert = self.accumulation.detect_big_move_preparation(df_daily, '1д')
+                                    
+                                    if alert['has_signal'] and alert['strength'] > SHITCOIN_ALERT_SETTINGS.get('min_strength', 50):
+                                        if not hasattr(self, 'last_shitcoin_alert_time'):
+                                            self.last_shitcoin_alert_time = {}
+                                        
+                                        if pair in self.last_shitcoin_alert_time:
+                                            time_diff = (datetime.now() - self.last_shitcoin_alert_time[pair]).total_seconds() / 60
+                                            if time_diff < SHITCOIN_ALERT_SETTINGS.get('cooldown_minutes', 120):
+                                                pass
+                                            else:
+                                                await self.send_shitcoin_alert(pair, alert)
+                                                self.last_shitcoin_alert_time[pair] = datetime.now()
+                                        else:
+                                            await self.send_shitcoin_alert(pair, alert)
+                                            self.last_shitcoin_alert_time[pair] = datetime.now()
+                                            
+                        except Exception as e:
+                            logger.error(f"❌ Ошибка оповещения о щиткоине {pair}: {e}")
+                    
                     try:
                         signal = self.analyzer.generate_signal(dataframes, metadata, pair, name)
                     except Exception as e:
@@ -8938,6 +9095,36 @@ class MultiExchangeScannerBot:
         finally:
             for fetcher in self.fetchers.values():
                 await fetcher.close()
+
+    async def send_shitcoin_alert(self, symbol: str, alert: Dict):
+        """Отправка оповещения о щиткоинах (дискавери/подготовка)"""
+        from config import SHITCOIN_ALERT_SETTINGS
+        
+        coin = symbol.split('/')[0]
+        
+        msg = f"🔔 ДИСКАВЕРИ/ПОДГОТОВКА\n\n"
+        msg += f"Монета: <code>{coin}</code> (щиткоин)\n"
+        msg += f"Таймфрейм: 1д\n\n"
+        
+        for reason in alert['reasons'][:5]:
+            msg += f"{reason}\n"
+        
+        if alert['direction'] == 'LONG':
+            msg += f"\n🎯 Направление: 📈 ВВЕРХ"
+        elif alert['direction'] == 'SHORT':
+            msg += f"\n🎯 Направление: 📉 ВНИЗ"
+        
+        msg += f"\n\n⚠️ Потенциальное большое движение!"
+        
+        try:
+            await self.telegram_bot.send_message(
+                chat_id=SHITCOIN_ALERT_SETTINGS['chat_id'],
+                text=msg,
+                parse_mode='HTML'
+            )
+            logger.info(f"✅ Отправлено оповещение о щиткоине: {symbol}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки оповещения: {e}")
 
 # ============== TELEGRAM HANDLER ==============
 
