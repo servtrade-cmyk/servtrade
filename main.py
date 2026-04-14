@@ -8187,6 +8187,9 @@ class MultiExchangeScannerBot:
         self.liquidity = LiquidityAnalyzer(LIQUIDITY_SETTINGS) if FEATURES['advanced']['liquidity'] else None
         self.last_signal_time = {}  # {coin: datetime}
         self.last_signal_direction = {}  # {coin: direction}
+        self.last_update_time = {}      # {pair: datetime} для кд
+        self.last_signal_direction = {} # {pair: direction} для отслеживания разворота
+        self.sent_early_signal = {}  # {pair: bool} — был ли отправлен ранний сигнал
 
         # Инициализация дополнительных анализаторов
         if FEATURES['advanced']['fibonacci']:
@@ -8232,6 +8235,90 @@ class MultiExchangeScannerBot:
             asyncio.create_task(self.stats_updater_loop())
             asyncio.create_task(self.daily_report_loop())
     
+    async def _load_dataframes_for_symbol(self, fetcher: BaseExchangeFetcher, symbol: str) -> Optional[Dict]:
+        """Загрузка всех таймфреймов для символа"""
+        dataframes = {}
+        for tf_name, tf_value in TIMEFRAMES.items():
+            limit = 100 if tf_name == 'current' else 50
+            df = await fetcher.fetch_ohlcv(symbol, tf_value, limit)
+            if df is not None and not df.empty:
+                df = self.analyzer.calculate_indicators(df)
+                dataframes[tf_name] = df
+        return dataframes if dataframes else None
+
+    async def _recalculate_signal(self, pair: str, metadata: Dict) -> Optional[Dict]:
+        """Пересчёт сигнала с новыми данными"""
+        fetcher = None
+        for f in self.fetchers.values():
+            if f.name == 'BingX':
+                fetcher = f
+                break
+        if not fetcher:
+            return None
+        
+        dataframes = await self._load_dataframes_for_symbol(fetcher, pair)
+        if not dataframes:
+            return None
+        
+        return self.analyzer.generate_signal(dataframes, metadata, pair, 'BingX')
+
+    async def check_dynamic_update(self, pair: str, old_signal: Dict, new_metadata: Dict) -> Optional[Dict]:
+        """Проверка необходимости обновления сигнала с защитой от спама"""
+        
+        # КД: не чаще 15 минут
+        if pair in self.last_update_time:
+            time_diff = (datetime.now() - self.last_update_time[pair]).total_seconds() / 60
+            if time_diff < 15:
+                logger.info(f"⏭️ {pair}: следующее обновление через {15 - time_diff:.0f} мин")
+                return None
+        else:
+            self.last_update_time = {}
+        
+        old_volume = old_signal.get('volume_24h', 0)
+        new_volume = new_metadata.get('volume_24h', 0)
+        volume_growth = (new_volume - old_volume) / old_volume * 100 if old_volume > 0 else 0
+        
+        if volume_growth > 30:
+            old_price = old_signal.get('price', 0)
+            new_price = new_metadata.get('price', 0)
+            old_direction = old_signal.get('direction', '')
+            
+            self.last_update_time[pair] = datetime.now()
+            
+            # Получаем новый сигнал
+            new_signal = await self._recalculate_signal(pair, new_metadata)
+            if not new_signal:
+                return None
+            
+            new_direction = new_signal.get('direction', '')
+            
+            # Логика отправки:
+            # 1. Если направление изменилось (разворот) → отправляем
+            # 2. Если ранний сигнал ещё не отправлен и цена растёт → отправляем (один раз)
+            # 3. Иначе → не отправляем
+            
+            should_send = False
+            
+            if new_direction != old_direction:
+                # Разворот — отправляем
+                should_send = True
+                logger.info(f"🔄 {pair}: РАЗВОРОТ {old_direction} → {new_direction}")
+                # Сбрасываем флаг раннего сигнала при развороте
+                self.sent_early_signal[pair] = False
+            
+            elif new_price > old_price and not self.sent_early_signal.get(pair, False):
+                # Ранний сигнал (один раз за движение вверх)
+                should_send = True
+                self.sent_early_signal[pair] = True
+                logger.info(f"📈 {pair}: РАННИЙ СИГНАЛ (рост объёмов +{volume_growth:.0f}%)")
+            
+            else:
+                logger.info(f"⏭️ {pair}: повторный сигнал пропущен (уже отправлен)")
+            
+            return new_signal if should_send else None
+        
+        return None
+
     def extract_coin(self, symbol: str) -> str:
         if '/USDT' in symbol:
             return symbol.split('/')[0]
@@ -8657,12 +8744,19 @@ class MultiExchangeScannerBot:
                             logger.error(f"❌ Ошибка оповещения о щиткоине {pair}: {e}")
                     
                     try:
-                        signal = self.analyzer.generate_signal(dataframes, metadata, pair, name)
+                        signal = self.analyzer.generate_signal(dataframes, metadata, pair, name)                        
                     except Exception as e:
                         logger.error(f"❌ Исключение в generate_signal для {pair}: {e}")
                         import traceback
                         traceback.print_exc()
                         continue
+
+                    # ===== ДИНАМИЧЕСКОЕ ОБНОВЛЕНИЕ СИГНАЛА =====
+                    if signal and signal.get('direction') != 'NEUTRAL':
+                        updated_signal = await self.check_dynamic_update(pair, signal, metadata)
+                        if updated_signal and updated_signal.get('direction') != 'NEUTRAL':
+                            signal = updated_signal
+                            logger.info(f"🔄 Сигнал {pair} обновлён")
                     
                     if signal is None:
                         logger.info(f"  ❌ generate_signal вернул None для {pair}")
