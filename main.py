@@ -4891,6 +4891,73 @@ class MultiTimeframeAnalyzer:
         
         return alignment
     
+    def analyze_trendlines_multi_timeframe(self, dataframes: Dict[str, pd.DataFrame]) -> Dict:
+        """
+        Анализ наклонных уровней на всех таймфреймах
+        """
+        from config import TRENDLINE_ANALYSIS_SETTINGS
+        
+        result = {
+            'has_breakout': False,
+            'signals': [],
+            'strength': 0,
+            'direction': None
+        }
+        
+        if not TRENDLINE_ANALYSIS_SETTINGS.get('enabled', True):
+            return result
+        
+        tf_order = ['5m', '15m', '30m', '1h', '4h', '1d']
+        tf_map = {
+            '5m': '5m',
+            '15m': 'current',
+            '30m': '30m',
+            '1h': 'hourly',
+            '4h': 'four_hourly',
+            '1d': 'daily',
+        }
+        
+        tf_display = {
+            '5m': '5м',
+            '15m': '15м',
+            '30m': '30м',
+            '1h': '1ч',
+            '4h': '4ч',
+            '1d': '1д',
+        }
+        
+        trend_analyzer = TrendLineAnalyzer()
+        
+        for tf in tf_order:
+            tf_key = tf_map.get(tf, tf)
+            if tf_key not in dataframes or dataframes[tf_key] is None:
+                continue
+            
+            df = dataframes[tf_key]
+            if df is None or df.empty or len(df) < 20:
+                continue
+            
+            trend_lines = trend_analyzer.find_trend_lines(df, touch_count=3)
+            
+            for line in trend_lines:
+                if line.get('is_broken', False):
+                    level_type = "сопротивления" if line['type'] == 'resistance' else "поддержки"
+                    touches = line.get('touches', 3)
+                    strength = TRENDLINE_ANALYSIS_SETTINGS.get('base_strength', 10) + touches * 5
+                    
+                    result['has_breakout'] = True
+                    result['signals'].append(f"📈 Пробой наклонного {level_type} на {tf_display.get(tf, tf)} ({touches} касаний)")
+                    result['strength'] = max(result['strength'], strength)
+                    result['direction'] = 'LONG' if line['type'] == 'resistance' else 'SHORT'
+                    
+                    logger.info(f"  ✅ Пробой наклонного уровня на {tf_display.get(tf, tf)}")
+                    break  # берём первый пробой на этом ТФ
+            
+            if result['has_breakout']:
+                break  # берём первый пробой на любом ТФ
+        
+        return result
+
     def check_tf_alignment(self, dataframes: Dict[str, pd.DataFrame], signal_type: str = 'regular') -> Dict:
         """
         Проверка согласованности таймфреймов для принятия решения о сигнале
@@ -6090,6 +6157,16 @@ class MultiTimeframeAnalyzer:
                         
             except Exception as e:
                 logger.error(f"❌ Ошибка анализа младших ТФ для {symbol}: {e}")
+
+        # ===== АНАЛИЗ НАКЛОННЫХ УРОВНЕЙ НА ВСЕХ ТАЙМФРЕЙМАХ =====
+        trendline_result = self.analyze_trendlines_multi_timeframe(dataframes)
+        if trendline_result['has_breakout']:
+            for signal_text in trendline_result['signals']:
+                reasons.append(signal_text)
+            confidence += trendline_result['strength']
+            if trendline_result['direction']:
+                direction = trendline_result['direction']
+                logger.info(f"  🎯 Направление от пробоя наклонного уровня: {direction}")
 
         # ===== ПОДТВЕРЖДЕНИЕ ПРОБОЕВ =====
         if FEATURES['advanced']['patterns'] and BREAKOUT_CONFIRMATION_SETTINGS['enabled']:
