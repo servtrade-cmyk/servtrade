@@ -4356,19 +4356,36 @@ class SMCFvgAnalyzer:
     #         return last_close > zone['max']
 
     def _is_fvg_closed(self, df: pd.DataFrame, zone: Dict) -> bool:
-        """Проверка, закрыта ли зона FVG (цена полностью вышла из зоны)"""
+        """Проверка, закрыта ли зона FVG (цена полностью вышла из зоны или слишком далеко)"""
         last_close = df['close'].iloc[-1]
         
         if zone['type'] == 'bullish':
             # Бычий FVG закрыт, если цена ушла ниже зоны
-            is_closed = last_close < zone['min']
-            logger.info(f"  🔍 Бычий FVG: цена={last_close:.6f}, min={zone['min']:.6f}, закрыт={is_closed}")
-            return is_closed
-        else:
+            if last_close < zone['min']:
+                logger.info(f"  🔍 Бычий FVG: цена={last_close:.6f} < min={zone['min']:.6f} -> ЗАКРЫТ")
+                return True
+            
+            # Бычий FVG закрыт, если цена ушла слишком далеко выше зоны (>10%)
+            if last_close > zone['max'] * 1.1:
+                logger.info(f"  🔍 Бычий FVG: цена={last_close:.6f} > max*1.1={zone['max']*1.1:.6f} -> ЗАКРЫТ (слишком далеко)")
+                return True
+            
+            logger.info(f"  🔍 Бычий FVG: цена={last_close:.6f} в зоне или рядом -> АКТИВЕН")
+            return False
+            
+        else:  # медвежий
             # Медвежий FVG закрыт, если цена ушла выше зоны
-            is_closed = last_close > zone['max']
-            logger.info(f"  🔍 Медвежий FVG: цена={last_close:.6f}, max={zone['max']:.6f}, закрыт={is_closed}")
-            return is_closed
+            if last_close > zone['max']:
+                logger.info(f"  🔍 Медвежий FVG: цена={last_close:.6f} > max={zone['max']:.6f} -> ЗАКРЫТ")
+                return True
+            
+            # Медвежий FVG закрыт, если цена ушла слишком далеко ниже зоны (>10%)
+            if last_close < zone['min'] * 0.9:
+                logger.info(f"  🔍 Медвежий FVG: цена={last_close:.6f} < min*0.9={zone['min']*0.9:.6f} -> ЗАКРЫТ (слишком далеко)")
+                return True
+            
+            logger.info(f"  🔍 Медвежий FVG: цена={last_close:.6f} в зоне или рядом -> АКТИВЕН")
+            return False
 
     def __init__(self, settings: Dict = None):
         from config import FVG_SETTINGS
