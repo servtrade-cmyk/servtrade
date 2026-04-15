@@ -4358,25 +4358,32 @@ class SMCFvgAnalyzer:
     def _is_fvg_closed(self, df: pd.DataFrame, zone: Dict) -> bool:
         last_close = df['close'].iloc[-1]
         
-        if zone['type'] == 'bullish':
-            if last_close < zone['min']:
-                logger.info(f"  🔍 Бычий FVG закрыт: цена={last_close:.6f} < min={zone['min']:.6f}")
-                return True
-            if last_close > zone['max'] * 1.1:
-                logger.info(f"  🔍 Бычий FVG закрыт: цена={last_close:.6f} > max*1.1={zone['max']*1.1:.6f}")
-                return True
-            return False
-        else:
-            if last_close > zone['max']:
-                logger.info(f"  🔍 Медвежий FVG закрыт: цена={last_close:.6f} > max={zone['max']:.6f}")
-                return True
-            if last_close < zone['min'] * 0.9:
-                logger.info(f"  🔍 Медвежий FVG закрыт: цена={last_close:.6f} < min*0.9={zone['min']*0.9:.6f}")
-                return True
-            if last_close < zone['min']:
-                logger.info(f"  🔍 Медвежий FVG закрыт: цена={last_close:.6f} < min={zone['min']:.6f}")
-                return True
-            return False
+        # Проверяем, была ли цена в зоне за последние 20 свечей
+        recent = df.tail(20)
+        was_in_zone = False
+        exited = False
+        
+        for _, row in recent.iterrows():
+            price = row['close']
+            
+            if zone['type'] == 'bullish':
+                if zone['min'] <= price <= zone['max']:
+                    was_in_zone = True
+                if was_in_zone and price > zone['max']:
+                    exited = True
+                    break
+            else:
+                if zone['min'] <= price <= zone['max']:
+                    was_in_zone = True
+                if was_in_zone and price < zone['min']:
+                    exited = True
+                    break
+        
+        if was_in_zone and exited:
+            logger.info(f"  🔍 FVG закрыт: цена входила в зону и вышла")
+            return True
+        
+        return False
 
     def __init__(self, settings: Dict = None):
         from config import FVG_SETTINGS
