@@ -4386,7 +4386,7 @@ class SMCFvgAnalyzer:
         }
         
         mode = self.settings.get('mode', 'advanced')
-        min_gap_size = self.settings.get('min_gap_size_pct', 0.3)
+        min_gap_size = self.settings.get('min_gap_size_pct', 0.5)
         
         # Расчёт автоматического порога (только для advanced режима)
         threshold = 0
@@ -4431,6 +4431,17 @@ class SMCFvgAnalyzer:
                     'description': f"📈 FVG ({tf_name}) бычий: {self.format_price(candle1['high'])}-{self.format_price(candle3['low'])} ({gap_size:.2f}%)"
                 }
 
+                # ✅ ПРОВЕРКА НА КОРРЕКТНОСТЬ ЗОНЫ
+                if zone['min'] >= zone['max']:
+                    logger.warning(f"⚠️ Неверная FVG зона: min={zone['min']:.6f}, max={zone['max']:.6f}")
+                    continue
+                
+                # ✅ ПРОВЕРКА НА МИКРО-ЗОНЫ
+                zone_size_pct = (zone['max'] - zone['min']) / zone['min'] * 100
+                if zone_size_pct < 0.1:
+                    logger.info(f"    ⏭️ {tf_name} FVG пропущен (слишком маленький: {zone_size_pct:.2f}%)")
+                    continue
+
                 # ✅ ПРОВЕРКА НА ЗАКРЫТЫЙ FVG
                 if self._is_fvg_closed(df, zone):
                     logger.info(f"    ⏭️ {tf_name} бычий FVG пропущен (закрыт)")
@@ -4459,6 +4470,17 @@ class SMCFvgAnalyzer:
                     'tf': tf_name,
                     'description': f"📉 FVG ({tf_name}) медвежий: {self.format_price(candle3['high'])}-{self.format_price(candle1['low'])} ({gap_size:.2f}%)"
                 }
+
+                # ✅ ПРОВЕРКА НА КОРРЕКТНОСТЬ ЗОНЫ
+                if zone['min'] >= zone['max']:
+                    logger.warning(f"⚠️ Неверная FVG зона: min={zone['min']:.6f}, max={zone['max']:.6f}")
+                    continue
+                
+                # ✅ ПРОВЕРКА НА МИКРО-ЗОНЫ
+                zone_size_pct = (zone['max'] - zone['min']) / zone['min'] * 100
+                if zone_size_pct < 0.1:
+                    logger.info(f"    ⏭️ {tf_name} FVG пропущен (слишком маленький: {zone_size_pct:.2f}%)")
+                    continue
 
                 # ✅ ПРОВЕРКА НА ЗАКРЫТЫЙ FVG
                 if self._is_fvg_closed(df, zone):
