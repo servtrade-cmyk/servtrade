@@ -4407,6 +4407,7 @@ class SMCFvgAnalyzer:
                 if gap_size < min_gap_size:
                     continue
                 
+                # 1. Создаём ZONE без переменных
                 zone = {
                     'type': 'bullish',
                     'min': candle1['high'],
@@ -4414,12 +4415,9 @@ class SMCFvgAnalyzer:
                     'size': gap_size,
                     'strength': min(100, gap_size * 20),
                     'tf': tf_name,
-                    'distance': distance,
-                    'touch_type': touch_type,
-                    'description': description
                 }
 
-                # Проверка расстояния до цены (касание или в зоне)
+                # 2. Проверка расстояния до цены (касание или в зоне)
                 if zone['min'] <= current_price <= zone['max']:
                     # Цена внутри зоны
                     is_near = True
@@ -4436,20 +4434,26 @@ class SMCFvgAnalyzer:
                 
                 # Пропускаем, если цена далеко от зоны
                 if not is_near:
-                    continue
-                
-                # Проверка на закрытый FVG
-                if self._is_fvg_closed(df, zone, i):
-                    continue
-                
-                # Формируем описание с типом касания
+                    continue               
+                                
+                # 3. Формируем описание с типом касания
                 if touch_type == 'в зоне':
                     description = f"📈 FVG ({tf_name}) бычий: {self.format_price(candle1['high'])}-{self.format_price(candle3['low'])} ({gap_size:.2f}%) — ЦЕНА В ЗОНЕ"
                 elif 'касание' in touch_type:
                     description = f"📈 FVG ({tf_name}) бычий: {self.format_price(candle1['high'])}-{self.format_price(candle3['low'])} ({gap_size:.2f}%) — {touch_type}"
                 else:
                     description = f"📈 FVG ({tf_name}) бычий: {self.format_price(candle1['high'])}-{self.format_price(candle3['low'])} ({gap_size:.2f}%)"                
-                                
+
+                # 4. Добавляем переменные в ZONE
+                zone['distance'] = distance
+                zone['touch_type'] = touch_type
+                zone['description'] = description
+            
+                # 5. Проверка на закрытый FVG
+                if self._is_fvg_closed(df, zone, i):
+                    continue
+            
+                # 6. Сохраняем результат
                 result['zones'].append(zone)
                 result['has_fvg'] = True
             
@@ -4465,15 +4469,9 @@ class SMCFvgAnalyzer:
                 gap_size = (candle1['low'] - candle3['high']) / candle3['high'] * 100
                 
                 if gap_size < min_gap_size:
-                    continue
+                    continue                               
                 
-                # # Проверка расстояния до цены
-                # zone = {
-                #     'min': candle3['high'],
-                #     'max': candle1['low'],
-                #     'type': 'bearish'
-                # }
-                
+                # 1. Создаём ZONE без переменных
                 zone = {
                     'type': 'bearish',
                     'min': candle3['high'],
@@ -4486,6 +4484,7 @@ class SMCFvgAnalyzer:
                     'description': description
                 }
 
+                # 2. Определяем переменные
                 if zone['min'] <= current_price <= zone['max']:
                     is_near = True
                     touch_type = 'в зоне'
@@ -4500,18 +4499,26 @@ class SMCFvgAnalyzer:
                     touch_type = 'касание сверху' if is_near else 'далеко сверху'
                 
                 if not is_near:
-                    continue
+                    continue               
                 
-                if self._is_fvg_closed(df, zone, i):
-                    continue
-                
+                # 3. Формируем описание
                 if touch_type == 'в зоне':
                     description = f"📉 FVG ({tf_name}) медвежий: {self.format_price(candle3['high'])}-{self.format_price(candle1['low'])} ({gap_size:.2f}%) — ЦЕНА В ЗОНЕ"
                 elif 'касание' in touch_type:
                     description = f"📉 FVG ({tf_name}) медвежий: {self.format_price(candle3['high'])}-{self.format_price(candle1['low'])} ({gap_size:.2f}%) — {touch_type}"
                 else:
                     description = f"📉 FVG ({tf_name}) медвежий: {self.format_price(candle3['high'])}-{self.format_price(candle1['low'])} ({gap_size:.2f}%)"              
-                                
+
+                # 4. Добавляем переменные в ZONE
+                zone['distance'] = distance
+                zone['touch_type'] = touch_type
+                zone['description'] = description
+                
+                # 5. Проверка на закрытый FVG
+                if self._is_fvg_closed(df, zone, i):
+                    continue
+
+                # 6. Сохраняем результат                
                 result['zones'].append(zone)
                 result['has_fvg'] = True
         
