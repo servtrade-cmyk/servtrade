@@ -4386,7 +4386,7 @@ class SMCFvgAnalyzer:
         }
         
         mode = self.settings.get('mode', 'advanced')
-        min_gap_size = self.settings.get('min_gap_size_pct', 0.5)
+        min_gap_size = self.settings.get('min_gap_size_pct', 0.3) / 100  # переводим в проценты
         
         # Расчёт автоматического порога (только для advanced режима)
         threshold = 0
