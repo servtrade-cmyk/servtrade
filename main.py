@@ -4344,16 +4344,31 @@ class SMCFvgAnalyzer:
         else:
             return f"{price:.2f}".rstrip('0').rstrip('.')
 
+    # def _is_fvg_closed(self, df: pd.DataFrame, zone: Dict) -> bool:
+    #     """Проверка, закрыта ли зона FVG (цена полностью вышла из зоны)"""
+    #     last_close = df['close'].iloc[-1]
+        
+    #     if zone['type'] == 'bullish':
+    #         # Бычий FVG закрыт, если цена ушла ниже зоны
+    #         return last_close < zone['min']
+    #     else:
+    #         # Медвежий FVG закрыт, если цена ушла выше зоны
+    #         return last_close > zone['max']
+
     def _is_fvg_closed(self, df: pd.DataFrame, zone: Dict) -> bool:
         """Проверка, закрыта ли зона FVG (цена полностью вышла из зоны)"""
         last_close = df['close'].iloc[-1]
         
         if zone['type'] == 'bullish':
             # Бычий FVG закрыт, если цена ушла ниже зоны
-            return last_close < zone['min']
+            is_closed = last_close < zone['min']
+            logger.info(f"  🔍 Бычий FVG: цена={last_close:.6f}, min={zone['min']:.6f}, закрыт={is_closed}")
+            return is_closed
         else:
             # Медвежий FVG закрыт, если цена ушла выше зоны
-            return last_close > zone['max']
+            is_closed = last_close > zone['max']
+            logger.info(f"  🔍 Медвежий FVG: цена={last_close:.6f}, max={zone['max']:.6f}, закрыт={is_closed}")
+            return is_closed
 
     def __init__(self, settings: Dict = None):
         from config import FVG_SETTINGS
