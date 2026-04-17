@@ -89,10 +89,10 @@ class SignalStatistics:
         self.db['statistics']['by_type'][signal_type] += 1
         
         if signal_type == 'discovery':
-        self.db['statistics']['by_type']['discovery'] = self.db['statistics']['by_type'].get('discovery', 0) + 1
+            self.db['statistics']['by_type']['discovery'] = self.db['statistics']['by_type'].get('discovery', 0) + 1
 
         if signal_type == 'vip_pump':
-        self.db['statistics']['by_type']['vip_pump'] = self.db['statistics']['by_type'].get('vip_pump', 0) + 1
+            self.db['statistics']['by_type']['vip_pump'] = self.db['statistics']['by_type'].get('vip_pump', 0) + 1
 
         self.save_database()
         logger.info(f"✅ Сигнал {signal_id} сохранен в БД")
