@@ -14,6 +14,7 @@ PUMP_CHAT_ID = os.getenv('PUMP_CHAT_ID', '')                     # Памп-си
 STATS_CHAT_ID = os.getenv('STATS_CHAT_ID', '')                   # Статистика
 ACCUMULATION_CHAT_ID = os.getenv('ACCUMULATION_CHAT_ID', '')     # Накопление
 SHITCOIN_ALERT_CHAT_ID = os.getenv('SHITCOIN_ALERT_CHAT_ID', '') # ID чата для оповещений о щиткоинах (дискавери/подготовка)
+VIP_PUMP_CHAT_ID = os.getenv('VIP_PUMP_CHAT_ID', '')
 
 UPDATE_INTERVAL = int(os.getenv('UPDATE_INTERVAL', 300))       # 15 минут для основного анализа
 PUMP_SCAN_INTERVAL = int(os.getenv('PUMP_SCAN_INTERVAL', 30))  # 30 секунд для памп-сканера
@@ -1394,4 +1395,12 @@ TRENDLINE_ANALYSIS_SETTINGS = {
     'min_touches': 3,           # минимальное количество касаний
     'strength_per_touch': 5,    # +5% уверенности за каждое касание
     'base_strength': 10,        # базовая уверенность за пробой
+}
+
+# ============== НАСТРОЙКИ VIP ПАМП-ДАМП ==============
+VIP_PUMP_SETTINGS = {
+    'enabled': True,
+    'min_confidence': 80,           # мин уверенность для VIP
+    'min_pump_change': 10.0,        # мин движение в % для VIP
+    'cooldown_minutes': 60,         # не чаще 1 часа на монету
 }
