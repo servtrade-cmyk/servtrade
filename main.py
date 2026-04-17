@@ -9148,27 +9148,63 @@ class MultiExchangeScannerBot:
                             if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
                                 logger.info(f"⏭️ VIP {coin}: кд {time_diff:.0f} мин")
                             else:
-                                await self.telegram_bot.send_message(
-                                    chat_id=VIP_PUMP_CHAT_ID,
-                                    text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
-                                    parse_mode='HTML',
-                                    reply_markup=pump_data['keyboard']
-                                )
+                                # VIP отправка с графиком
+                                try:
+                                    if df is not None and not df.empty:
+                                        df = self.analyzer.calculate_indicators(df)
+                                        chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
+                                        
+                                        await self.telegram_bot.send_photo(
+                                            chat_id=VIP_PUMP_CHAT_ID,
+                                            photo=chart_buf,
+                                            caption=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                            parse_mode='HTML',
+                                            reply_markup=pump_data['keyboard']
+                                        )
+                                        logger.info(f"✅ Отправлен VIP сигнал с графиком: {signal['symbol']}")
+                                    else:
+                                        await self.telegram_bot.send_message(
+                                            chat_id=VIP_PUMP_CHAT_ID,
+                                            text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                            parse_mode='HTML',
+                                            reply_markup=pump_data['keyboard']
+                                        )
+                                        logger.info(f"✅ Отправлен VIP сигнал (без графика): {signal['symbol']}")
+                                except Exception as e:
+                                    logger.error(f"❌ Ошибка отправки VIP сигнала: {e}")
+                                
                                 self.last_vip_signal_time[coin] = current_time
                                 if hasattr(self, 'stats'):
                                     self.stats.add_signal(signal, 'vip_pump')
-                                logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
                         else:
-                            await self.telegram_bot.send_message(
-                                chat_id=VIP_PUMP_CHAT_ID,
-                                text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
-                                parse_mode='HTML',
-                                reply_markup=pump_data['keyboard']
-                            )
+                            # VIP отправка с графиком (первый раз)
+                            try:
+                                if df is not None and not df.empty:
+                                    df = self.analyzer.calculate_indicators(df)
+                                    chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
+                                    
+                                    await self.telegram_bot.send_photo(
+                                        chat_id=VIP_PUMP_CHAT_ID,
+                                        photo=chart_buf,
+                                        caption=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                        parse_mode='HTML',
+                                        reply_markup=pump_data['keyboard']
+                                    )
+                                    logger.info(f"✅ Отправлен VIP сигнал с графиком: {signal['symbol']}")
+                                else:
+                                    await self.telegram_bot.send_message(
+                                        chat_id=VIP_PUMP_CHAT_ID,
+                                        text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                        parse_mode='HTML',
+                                        reply_markup=pump_data['keyboard']
+                                    )
+                                    logger.info(f"✅ Отправлен VIP сигнал (без графика): {signal['symbol']}")
+                            except Exception as e:
+                                logger.error(f"❌ Ошибка отправки VIP сигнала: {e}")
+                            
                             self.last_vip_signal_time[coin] = current_time
                             if hasattr(self, 'stats'):
                                 self.stats.add_signal(signal, 'vip_pump')
-                            logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
     async def _send_accumulation_message(self, signal: Dict, coin: str):
         """Отправка сообщения о накоплении"""
         contract_info = None
