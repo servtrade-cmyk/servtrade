@@ -9114,7 +9114,45 @@ class MultiExchangeScannerBot:
                 
         except Exception as e:
             logger.error(f"❌ Ошибка отправки пампа: {e}")
+
+        # ✅ VIP ОТПРАВКА (ПОСЛЕ ОБЫЧНОЙ ОТПРАВКИ)
+        from config import VIP_PUMP_SETTINGS, VIP_PUMP_CHAT_ID
     
+        if VIP_PUMP_SETTINGS.get('enabled', True):
+            pump_change = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
+            confidence = signal.get('confidence', 0)
+            
+            if pump_change >= VIP_PUMP_SETTINGS.get('min_pump_change', 10.0) or confidence >= VIP_PUMP_SETTINGS.get('min_confidence', 80):
+                # Проверка кд для VIP
+                if not hasattr(self, 'last_vip_signal_time'):
+                    self.last_vip_signal_time = {}
+                
+                if coin in self.last_vip_signal_time:
+                    time_diff = (current_time - self.last_vip_signal_time[coin]).total_seconds() / 60
+                    if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
+                        logger.info(f"⏭️ VIP {coin}: кд {time_diff:.0f} мин")
+                    else:
+                        await self.telegram_bot.send_message(
+                            chat_id=VIP_PUMP_CHAT_ID,
+                            text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                            parse_mode='HTML',
+                            reply_markup=pump_data['keyboard']
+                        )
+                        self.last_vip_signal_time[coin] = current_time
+                        if hasattr(self, 'stats'):
+                            self.stats.add_signal(signal, 'vip_pump')
+                        logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
+                else:
+                    await self.telegram_bot.send_message(
+                        chat_id=VIP_PUMP_CHAT_ID,
+                        text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                        parse_mode='HTML',
+                        reply_markup=pump_data['keyboard']
+                    )
+                    self.last_vip_signal_time[coin] = current_time
+                    if hasattr(self, 'stats'):
+                        self.stats.add_signal(signal, 'vip_pump')
+                    logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
     async def _send_accumulation_message(self, signal: Dict, coin: str):
         """Отправка сообщения о накоплении"""
         contract_info = None
@@ -9446,10 +9484,13 @@ class TelegramHandler:
                     days = int(part)
                 elif part.lower() in ['pump', 'pumps']:
                     signal_type = 'pump'
+                elif part.lower() in ['vip', 'vip_pump']:
+                    signal_type = 'vip_pump'
                 elif part.lower() in ['regular', 'обычные']:
                     signal_type = 'regular'
                 elif part.lower() in ['accumulation', 'накопление']:
                     signal_type = 'accumulation'
+
                 elif part.upper() in [p.split('/')[0] for p in PAIRS_TO_SCAN]:
                     coin = part.upper()
         
@@ -9484,6 +9525,9 @@ class TelegramHandler:
         if data == "stats_7":
             stats = self.bot.stats.get_statistics(days=7)
             msg = self.bot.stats.format_stats_message(stats, 7)
+        elif data == "stats_30":
+            stats = self.bot.stats.get_statistics(days=30)
+            msg = self.bot.stats.format_stats_message(stats, 30)
         elif data == "stats_pump_7":
             stats = self.bot.stats.get_statistics(days=7, signal_type='pump')
             msg = self.bot.stats.format_stats_message(stats, 7, signal_type='pump')
@@ -9493,6 +9537,12 @@ class TelegramHandler:
         elif data == "stats_accum_7":
             stats = self.bot.stats.get_statistics(days=7, signal_type='accumulation')
             msg = self.bot.stats.format_stats_message(stats, 7, signal_type='accumulation')
+        elif data == "stats_vip_7":
+            stats = self.bot.stats.get_statistics(days=7, signal_type='vip_pump')
+            msg = self.bot.stats.format_stats_message(stats, 7, signal_type='vip_pump')
+        elif data == "stats_discovery_7":
+            stats = self.bot.stats.get_statistics(days=7, signal_type='discovery')
+            msg = self.bot.stats.format_stats_message(stats, 7, signal_type='discovery')
         elif data == "stats_coins":
             coins = set()
             for signal in self.bot.stats.db['signals'].values():
@@ -9524,31 +9574,33 @@ class TelegramHandler:
             msg = self.bot.stats.format_stats_message(stats, 7, coin=coin)
         elif data == "stats_help":
             msg = """
-📚 *ПОМОЩЬ ПО СТАТИСТИКЕ*
+    📚 *ПОМОЩЬ ПО СТАТИСТИКЕ*
 
-Вы можете нажимать кнопки или вводить команды:
+    Вы можете нажимать кнопки или вводить команды:
 
-🔹 *Простые команды:*
-/stats - статистика за 7 дней
-/stats 30 - статистика за 30 дней
-/stats 1 - статистика за сегодня
+    🔹 *Простые команды:*
+    /stats - статистика за 7 дней
+    /stats 30 - статистика за 30 дней
+    /stats 1 - статистика за сегодня
 
-🔹 *По типу сигналов:*
-/stats pump - только пампы
-/stats regular - только обычные
-/stats accumulation - только накопление
+    🔹 *По типу сигналов:*
+    /stats pump - только пампы
+    /stats vip - только VIP пампы
+    /stats regular - только обычные
+    /stats accumulation - только накопление
+    /stats discovery - только дискавери
 
-🔹 *По монетам:*
-/stats BTC - по Bitcoin
-/stats ETH 14 - по Ethereum за 14 дней
+    🔹 *По монетам:*
+    /stats BTC - по Bitcoin
+    /stats ETH 14 - по Ethereum за 14 дней
 
-🔹 *Примеры:*
-/stats 7 pump - пампы за неделю
-/stats 30 accumulation - накопление за месяц
-/stats 14 BTC - по BTC за 14 дней
+    🔹 *Примеры:*
+    /stats 7 pump - пампы за неделю
+    /stats 30 accumulation - накопление за месяц
+    /stats 14 BTC - по BTC за 14 дней
 
-📌 *Совет:* Просто нажимайте кнопки! 👆
-"""
+    📌 *Совет:* Просто нажимайте кнопки! 👆
+    """
         elif data == "stats_back":
             stats = self.bot.stats.get_statistics(days=7)
             msg = self.bot.stats.format_stats_message(stats, 7)
@@ -9557,10 +9609,13 @@ class TelegramHandler:
         
         keyboard = [
             [InlineKeyboardButton("📊 Общая", callback_data="stats_7"),
-             InlineKeyboardButton("🚀 Пампы", callback_data="stats_pump_7")],
+            InlineKeyboardButton("📊 30 дней", callback_data="stats_30")],
+            [InlineKeyboardButton("🚀 Пампы", callback_data="stats_pump_7"),
+            InlineKeyboardButton("👑 VIP Пампы", callback_data="stats_vip_7")],
             [InlineKeyboardButton("📦 Накопление", callback_data="stats_accum_7"),
-             InlineKeyboardButton("📈 По монетам", callback_data="stats_coins")],
-            [InlineKeyboardButton("❓ Помощь", callback_data="stats_help")]
+            InlineKeyboardButton("🔍 Дискавери", callback_data="stats_discovery_7")],
+            [InlineKeyboardButton("📈 По монетам", callback_data="stats_coins"),
+            InlineKeyboardButton("❓ Помощь", callback_data="stats_help")]
         ]
         
         await query.edit_message_text(
@@ -9593,7 +9648,9 @@ class TelegramHandler:
                 signal_data = self.bot.last_signals[coin]
                 signal = signal_data['signal']
                 
-                contract_info, df = None, None
+                # Получаем актуальные данные
+                contract_info = None
+                df = None
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
@@ -9619,7 +9676,7 @@ class TelegramHandler:
                     )
                 else:
                     await query.edit_message_text(text=msg, parse_mode='HTML', reply_markup=keyboard)
-                await query.answer("🔄 Сигнал обновлен")
+                await query.answer("🔄 Сигнал обновлён")
             else:
                 await query.edit_message_text(f"❌ Нет данных для {coin}")
             return
