@@ -9123,36 +9123,52 @@ class MultiExchangeScannerBot:
             confidence = signal.get('confidence', 0)
             
             if pump_change >= VIP_PUMP_SETTINGS.get('min_pump_change', 10.0) or confidence >= VIP_PUMP_SETTINGS.get('min_confidence', 80):
-                # Проверка кд для VIP
-                if not hasattr(self, 'last_vip_signal_time'):
-                    self.last_vip_signal_time = {}
+                # Отправка в VIP канал
+                from config import VIP_PUMP_SETTINGS, VIP_PUMP_CHAT_ID
                 
-                if coin in self.last_vip_signal_time:
-                    time_diff = (current_time - self.last_vip_signal_time[coin]).total_seconds() / 60
-                    if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
-                        logger.info(f"⏭️ VIP {coin}: кд {time_diff:.0f} мин")
-                    else:
-                        await self.telegram_bot.send_message(
-                            chat_id=VIP_PUMP_CHAT_ID,
-                            text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
-                            parse_mode='HTML',
-                            reply_markup=pump_data['keyboard']
-                        )
-                        self.last_vip_signal_time[coin] = current_time
-                        if hasattr(self, 'stats'):
-                            self.stats.add_signal(signal, 'vip_pump')
-                        logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
-                else:
-                    await self.telegram_bot.send_message(
-                        chat_id=VIP_PUMP_CHAT_ID,
-                        text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
-                        parse_mode='HTML',
-                        reply_markup=pump_data['keyboard']
+                if VIP_PUMP_SETTINGS.get('enabled', True):
+                    pump_change = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
+                    confidence = signal.get('confidence', 0)
+                    volume_ratio = signal.get('volume_ratio', 1)  # ✅ добавить
+                    
+                    # ✅ VIP условия: движение >=10%, уверенность >=80%, объём >=3x
+                    is_vip = (
+                        pump_change >= VIP_PUMP_SETTINGS.get('min_pump_change', 10.0) and
+                        confidence >= VIP_PUMP_SETTINGS.get('min_confidence', 80) and
+                        volume_ratio >= VIP_PUMP_SETTINGS.get('min_volume_ratio', 3.0)
                     )
-                    self.last_vip_signal_time[coin] = current_time
-                    if hasattr(self, 'stats'):
-                        self.stats.add_signal(signal, 'vip_pump')
-                    logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
+                    
+                    if is_vip:
+                        # Проверка кд для VIP
+                        if not hasattr(self, 'last_vip_signal_time'):
+                            self.last_vip_signal_time = {}
+                        
+                        if coin in self.last_vip_signal_time:
+                            time_diff = (current_time - self.last_vip_signal_time[coin]).total_seconds() / 60
+                            if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
+                                logger.info(f"⏭️ VIP {coin}: кд {time_diff:.0f} мин")
+                            else:
+                                await self.telegram_bot.send_message(
+                                    chat_id=VIP_PUMP_CHAT_ID,
+                                    text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                    parse_mode='HTML',
+                                    reply_markup=pump_data['keyboard']
+                                )
+                                self.last_vip_signal_time[coin] = current_time
+                                if hasattr(self, 'stats'):
+                                    self.stats.add_signal(signal, 'vip_pump')
+                                logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
+                        else:
+                            await self.telegram_bot.send_message(
+                                chat_id=VIP_PUMP_CHAT_ID,
+                                text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                parse_mode='HTML',
+                                reply_markup=pump_data['keyboard']
+                            )
+                            self.last_vip_signal_time[coin] = current_time
+                            if hasattr(self, 'stats'):
+                                self.stats.add_signal(signal, 'vip_pump')
+                            logger.info(f"✅ Отправлен VIP сигнал: {signal['symbol']}")
     async def _send_accumulation_message(self, signal: Dict, coin: str):
         """Отправка сообщения о накоплении"""
         contract_info = None
