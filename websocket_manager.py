@@ -22,7 +22,7 @@ class BingXWebSocketManager:
         self.connections = {}
         self.callbacks = {}
         self.prices = {}
-        self.reconnect_delay = 5
+        self.reconnect_delay = 7   # Было 5
         self.max_reconnect_attempts = 10
         self.running = True
         
