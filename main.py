@@ -9516,8 +9516,9 @@ class TelegramHandler:
         )
     
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.info(f"📢 Команда /stats была вызвана в чате с ID: {update.effective_chat.id}")
         logger.info(f"📊 stats_command вызвана, chat_id={update.effective_chat.id}")
-
+        
         if str(update.effective_chat.id) != STATS_SETTINGS['stats_chat_id']:
             await update.message.reply_text("❌ Эта команда доступна только в группе статистики")
             return
