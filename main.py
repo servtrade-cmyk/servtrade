@@ -7126,9 +7126,67 @@ class MultiTimeframeAnalyzer:
             'tf_alignment_percentage': tf_alignment['percentage'],
             'tf_aligned_count': tf_alignment['aligned_count'],
             'tf_total_count': tf_alignment['total_count'],
+            
+            # ===== БАЗОВЫЕ ИНДИКАТОРЫ =====
+            'rsi': last.get('rsi'),
+            'macd_histogram': last.get('MACDh_12_26_9'),
+            'volume_ratio': last.get('volume_ratio', 1),
+            'vwap': last.get('vwap'),
+            
+            # ===== EMA (все периоды) =====
+            'ema_9': last.get('ema_9'),
+            'ema_14': last.get('ema_14'),
+            'ema_21': last.get('ema_21'),
+            'ema_28': last.get('ema_28'),
+            'ema_50': last.get('ema_50'),
+            'ema_100': last.get('ema_100'),
+            'ema_200': last.get('ema_200'),
+            
+            # ===== SMA =====
+            'sma_50': last.get('sma_50'),
+            'sma_200': last.get('sma_200'),
+            
+            # ===== BOLLINGER BANDS =====
+            'bb_upper': last.get('BBU_20_2.0'),
+            'bb_lower': last.get('BBL_20_2.0'),
+            'bb_middle': last.get('BBM_20_2.0'),
+            'bb_position': (current_price - last.get('BBL_20_2.0', 0)) / (last.get('BBU_20_2.0', 1) - last.get('BBL_20_2.0', 1)) if last.get('BBU_20_2.0') else 0,
+            
+            # ===== ИНДИКАТОРЫ ИЗ АНАЛИЗАТОРОВ =====
+            'fibonacci': fib_analysis if fib_analysis else None,
+            'accumulation': accumulation_analysis if accumulation_analysis else None,
+            'fvg_zones': fvg_analysis.get('zones', []) if fvg_analysis else [],
+            'has_pattern': pattern_analysis.get('has_pattern', False) if pattern_analysis else False,
+            'confluence_strength': potential_analysis.get('confluence_strength', 0) if potential_analysis else 0,
+            
+            # ===== SMC ИНДИКАТОРЫ =====
+            'has_choch': choch_analysis.get('has_choch', False) if 'choch_analysis' in locals() and choch_analysis else False,
+            'has_premium_zone': pd_analysis.get('zone_type') == 'premium' if 'pd_analysis' in locals() and pd_analysis else False,
+            'has_discount_zone': pd_analysis.get('zone_type') == 'discount' if 'pd_analysis' in locals() and pd_analysis else False,
+            'has_eqh_eql': equal_analysis.get('has_equal', False) if 'equal_analysis' in locals() and equal_analysis else False,
+            'has_divergence': rsi_divergence if 'rsi_divergence' in locals() else False,
+            'trendline_breakout': trendline_breakout if 'trendline_breakout' in locals() else False,
+            'has_imbalance': imbalance_result.get('has_imbalance', False) if 'imbalance_result' in locals() and imbalance_result else False,
+            
             **targets
         }
         
+        # Добавляем Order Blocks если есть
+        if hasattr(self, 'smart_money') and self.smart_money:
+            order_blocks = self.smart_money.find_order_blocks(df)
+            result['order_blocks'] = order_blocks[:3] if order_blocks else []
+            result['has_order_block'] = len(order_blocks) > 0
+        
+        # Добавляем Fractals если есть
+        if hasattr(self, 'fractal') and self.fractal:
+            fractal_result = self.fractal.analyze(df)
+            result['fractals'] = fractal_result
+            result['has_fractals'] = fractal_result.get('has_fractal', False)
+        
+        # Добавляем зоны ликвидности
+        if 'liquidity_zones' in locals() and liquidity_zones:
+            result['liquidity_zones'] = liquidity_zones.get('zones', [])
+
         # Добавляем зоны FVG для графика
         if fvg_analysis['has_fvg'] and 'zones' in fvg_analysis:
             result['fvg_zones'] = fvg_analysis['zones']
@@ -9129,27 +9187,180 @@ class MultiExchangeScannerBot:
                 if VIP_PUMP_SETTINGS.get('enabled', True):
                     pump_change = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
                     confidence = signal.get('confidence', 0)
-                    volume_ratio = signal.get('volume_ratio', 1)  # ✅ добавить
-                    logger.info(f"🔍 VIP проверка: pump_change={pump_change}, confidence={confidence}, volume_ratio={volume_ratio}")
-
-                    # ✅ VIP условия: движение >=10%, уверенность >=80%, объём >=3x
-                    is_vip = (
+                    volume_ratio = signal.get('volume_ratio', 1)
+                    
+                    # Базовые условия
+                    basic_ok = (
                         pump_change >= VIP_PUMP_SETTINGS.get('min_pump_change', 10.0) and
                         confidence >= VIP_PUMP_SETTINGS.get('min_confidence', 80) and
                         volume_ratio >= VIP_PUMP_SETTINGS.get('min_volume_ratio', 3.0)
                     )
                     
-                    if is_vip:
-                        # Проверка кд для VIP
-                        if not hasattr(self, 'last_vip_signal_time'):
-                            self.last_vip_signal_time = {}
+                    if basic_ok:
+                        indicators_ok = True
+                        ind = VIP_PUMP_SETTINGS.get('indicators', {})
                         
-                        if coin in self.last_vip_signal_time:
-                            time_diff = (current_time - self.last_vip_signal_time[coin]).total_seconds() / 60
-                            if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
-                                logger.info(f"⏭️ VIP {coin}: кд {time_diff:.0f} мин")
+                        # 1. RSI
+                        if ind.get('rsi', {}).get('enabled', False):
+                            rsi = signal.get('rsi', 50)
+                            rsi_ok = rsi >= ind['rsi'].get('overbought', 80) or rsi <= ind['rsi'].get('oversold', 20)
+                            indicators_ok = indicators_ok and rsi_ok
+                            logger.info(f"  🔍 VIP RSI: {rsi:.1f} -> {'✅' if rsi_ok else '❌'}")
+                        
+                        # 2. MACD
+                        if ind.get('macd', {}).get('enabled', False):
+                            macd = signal.get('macd_histogram', 0)
+                            if ind['macd'].get('require_bullish', True):
+                                macd_ok = macd > 0
                             else:
-                                # VIP отправка с графиком
+                                macd_ok = macd < 0
+                            indicators_ok = indicators_ok and macd_ok
+                            logger.info(f"  🔍 VIP MACD: {macd:.4f} -> {'✅' if macd_ok else '❌'}")
+                        
+                        # 3. EMA тренд
+                        if ind.get('ema', {}).get('enabled', False):
+                            ema_fast = signal.get('ema_9', 0)
+                            ema_slow = signal.get('ema_21', 0)
+                            ema_ok = ema_fast > ema_slow
+                            indicators_ok = indicators_ok and ema_ok
+                            logger.info(f"  🔍 VIP EMA: {ema_fast:.4f} > {ema_slow:.4f} -> {'✅' if ema_ok else '❌'}")
+                        
+                        # 4. VWAP
+                        if ind.get('vwap', {}).get('enabled', False):
+                            current_price = signal.get('price', 0)
+                            vwap = signal.get('vwap', 0)
+                            if vwap > 0:
+                                if ind['vwap'].get('require_above', False):
+                                    vwap_ok = current_price > vwap
+                                elif ind['vwap'].get('require_below', False):
+                                    vwap_ok = current_price < vwap
+                                else:
+                                    vwap_ok = True
+                            else:
+                                vwap_ok = True
+                            indicators_ok = indicators_ok and vwap_ok
+                            logger.info(f"  🔍 VIP VWAP: цена={current_price:.4f}, VWAP={vwap:.4f} -> {'✅' if vwap_ok else '❌'}")
+                        
+                        # 5. Bollinger Bands
+                        if ind.get('bollinger', {}).get('enabled', False):
+                            bb_position = signal.get('bb_position', 0.5)
+                            bb_ok = bb_position > 0.8 or bb_position < 0.2
+                            indicators_ok = indicators_ok and bb_ok
+                            logger.info(f"  🔍 VIP Bollinger: {bb_position:.2f} -> {'✅' if bb_ok else '❌'}")
+                        
+                        # 6. FVG
+                        if ind.get('fvg', {}).get('enabled', False):
+                            fvg_zones = signal.get('fvg_zones', [])
+                            max_dist = ind['fvg'].get('max_distance_pct', 1.0)
+                            fvg_ok = any(z.get('distance', 999) <= max_dist for z in fvg_zones)
+                            indicators_ok = indicators_ok and fvg_ok
+                            logger.info(f"  🔍 VIP FVG: {'✅' if fvg_ok else '❌'}")
+                        
+                        # 7. Старшие ТФ
+                        if ind.get('senior_tf', {}).get('enabled', False):
+                            alignment = signal.get('alignment', {}).get('trend_alignment', 0)
+                            min_alignment = ind['senior_tf'].get('min_alignment', 70)
+                            senior_ok = alignment >= min_alignment
+                            indicators_ok = indicators_ok and senior_ok
+                            logger.info(f"  🔍 VIP Старшие ТФ: {alignment}% -> {'✅' if senior_ok else '❌'}")
+                        
+                        # 8. Паттерны
+                        if ind.get('patterns', {}).get('enabled', False):
+                            has_pattern = signal.get('has_pattern', False)
+                            indicators_ok = indicators_ok and has_pattern
+                            logger.info(f"  🔍 VIP Паттерны: {'✅' if has_pattern else '❌'}")
+                        
+                        # 9. Накопление
+                        if ind.get('accumulation', {}).get('enabled', False):
+                            has_accumulation = signal.get('accumulation', {}).get('has_accumulation', False)
+                            indicators_ok = indicators_ok and has_accumulation
+                            logger.info(f"  🔍 VIP Накопление: {'✅' if has_accumulation else '❌'}")
+                        
+                        # 10. Order Blocks
+                        if ind.get('order_blocks', {}).get('enabled', False):
+                            has_order_block = signal.get('has_order_block', False)
+                            indicators_ok = indicators_ok and has_order_block
+                            logger.info(f"  🔍 VIP Order Blocks: {'✅' if has_order_block else '❌'}")
+                        
+                        # 11. Premium/Discount
+                        if ind.get('premium_discount', {}).get('enabled', False):
+                            has_premium = signal.get('has_premium_zone', False)
+                            has_discount = signal.get('has_discount_zone', False)
+                            pd_ok = has_premium or has_discount
+                            indicators_ok = indicators_ok and pd_ok
+                            logger.info(f"  🔍 VIP Premium/Discount: {'✅' if pd_ok else '❌'}")
+                        
+                        # 12. CHoCH
+                        if ind.get('choch', {}).get('enabled', False):
+                            has_choch = signal.get('has_choch', False)
+                            indicators_ok = indicators_ok and has_choch
+                            logger.info(f"  🔍 VIP CHoCH: {'✅' if has_choch else '❌'}")
+                        
+                        # 13. Дивергенция
+                        if ind.get('divergence', {}).get('enabled', False):
+                            has_divergence = signal.get('has_divergence', False)
+                            indicators_ok = indicators_ok and has_divergence
+                            logger.info(f"  🔍 VIP Дивергенция: {'✅' if has_divergence else '❌'}")
+                        
+                        # 14. Конфлюенция
+                        if ind.get('confluence', {}).get('enabled', False):
+                            confluence = signal.get('confluence_strength', 0)
+                            min_confluence = ind['confluence'].get('min_strength', 50)
+                            confluence_ok = confluence >= min_confluence
+                            indicators_ok = indicators_ok and confluence_ok
+                            logger.info(f"  🔍 VIP Конфлюенция: {confluence}% -> {'✅' if confluence_ok else '❌'}")
+                        
+                        # 15. Согласованность ТФ
+                        if ind.get('tf_alignment', {}).get('enabled', False):
+                            tf_alignment = signal.get('tf_alignment_percentage', 0)
+                            min_tf_alignment = ind['tf_alignment'].get('min_percentage', 70)
+                            tf_ok = tf_alignment >= min_tf_alignment
+                            indicators_ok = indicators_ok and tf_ok
+                            logger.info(f"  🔍 VIP Согласованность ТФ: {tf_alignment}% -> {'✅' if tf_ok else '❌'}")
+                        
+                        is_vip = indicators_ok
+                        logger.info(f"  🔍 VIP результат: {'✅ ДА' if is_vip else '❌ НЕТ'}")
+                        
+                        if is_vip:
+                            # Проверка кд для VIP
+                            if not hasattr(self, 'last_vip_signal_time'):
+                                self.last_vip_signal_time = {}
+                            
+                            if coin in self.last_vip_signal_time:
+                                time_diff = (current_time - self.last_vip_signal_time[coin]).total_seconds() / 60
+                                if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
+                                    logger.info(f"⏭️ VIP {coin}: кд {time_diff:.0f} мин")
+                                else:
+                                    # VIP отправка с графиком
+                                    try:
+                                        if df is not None and not df.empty:
+                                            df = self.analyzer.calculate_indicators(df)
+                                            chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
+                                            
+                                            await self.telegram_bot.send_photo(
+                                                chat_id=VIP_PUMP_CHAT_ID,
+                                                photo=chart_buf,
+                                                caption=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                                parse_mode='HTML',
+                                                reply_markup=pump_data['keyboard']
+                                            )
+                                            logger.info(f"✅ Отправлен VIP сигнал с графиком: {signal['symbol']}")
+                                        else:
+                                            await self.telegram_bot.send_message(
+                                                chat_id=VIP_PUMP_CHAT_ID,
+                                                text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                                parse_mode='HTML',
+                                                reply_markup=pump_data['keyboard']
+                                            )
+                                            logger.info(f"✅ Отправлен VIP сигнал (без графика): {signal['symbol']}")
+                                    except Exception as e:
+                                        logger.error(f"❌ Ошибка отправки VIP сигнала: {e}")
+                                    
+                                    self.last_vip_signal_time[coin] = current_time
+                                    if hasattr(self, 'stats'):
+                                        self.stats.add_signal(signal, 'vip_pump')
+                            else:
+                                # VIP отправка с графиком (первый раз)
                                 try:
                                     if df is not None and not df.empty:
                                         df = self.analyzer.calculate_indicators(df)
@@ -9177,35 +9388,6 @@ class MultiExchangeScannerBot:
                                 self.last_vip_signal_time[coin] = current_time
                                 if hasattr(self, 'stats'):
                                     self.stats.add_signal(signal, 'vip_pump')
-                        else:
-                            # VIP отправка с графиком (первый раз)
-                            try:
-                                if df is not None and not df.empty:
-                                    df = self.analyzer.calculate_indicators(df)
-                                    chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
-                                    
-                                    await self.telegram_bot.send_photo(
-                                        chat_id=VIP_PUMP_CHAT_ID,
-                                        photo=chart_buf,
-                                        caption=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
-                                        parse_mode='HTML',
-                                        reply_markup=pump_data['keyboard']
-                                    )
-                                    logger.info(f"✅ Отправлен VIP сигнал с графиком: {signal['symbol']}")
-                                else:
-                                    await self.telegram_bot.send_message(
-                                        chat_id=VIP_PUMP_CHAT_ID,
-                                        text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
-                                        parse_mode='HTML',
-                                        reply_markup=pump_data['keyboard']
-                                    )
-                                    logger.info(f"✅ Отправлен VIP сигнал (без графика): {signal['symbol']}")
-                            except Exception as e:
-                                logger.error(f"❌ Ошибка отправки VIP сигнала: {e}")
-                            
-                            self.last_vip_signal_time[coin] = current_time
-                            if hasattr(self, 'stats'):
-                                self.stats.add_signal(signal, 'vip_pump')
     async def _send_accumulation_message(self, signal: Dict, coin: str):
         """Отправка сообщения о накоплении"""
         contract_info = None
@@ -9518,7 +9700,7 @@ class TelegramHandler:
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"📢 Команда /stats была вызвана в чате с ID: {update.effective_chat.id}")
         logger.info(f"📊 stats_command вызвана, chat_id={update.effective_chat.id}")
-        
+
         if str(update.effective_chat.id) != STATS_SETTINGS['stats_chat_id']:
             await update.message.reply_text("❌ Эта команда доступна только в группе статистики")
             return
