@@ -5759,7 +5759,22 @@ class MultiTimeframeAnalyzer:
 
         fvg_analysis = None
         liquidity_zones = None  
-        
+
+        # ===== ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ (значения по умолчанию) =====
+        pattern_analysis = None
+        choch_analysis = None
+        pd_analysis = None
+        equal_analysis = None
+        rsi_divergence = False
+        imbalance_result = None
+        senior_tf_analysis = {'has_senior_level': False, 'signals': [], 'strength': 0}
+        trendline_breakout_5m = False
+        trendline_breakout_15m = False
+        potential_analysis = None
+        accumulation_analysis = None
+        fib_analysis = None
+        stop_hunt_signal = False
+    
         # ===== АНАЛИЗ СОГЛАСОВАННОСТИ ТРЕНДОВ =====
         alignment = self.analyze_timeframe_alignment(dataframes)
         logger.info(f"  📊 {symbol} - Согласованность трендов: {alignment['trend_alignment']}%")
