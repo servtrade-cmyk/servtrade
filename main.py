@@ -6841,44 +6841,83 @@ class MultiTimeframeAnalyzer:
         signal_quality = 0
         quality_reasons = []
         
-        # Проверяем наличие сильных уровней на старших ТФ
+        # 1. Сильные уровни на старших ТФ
         if senior_tf_analysis.get('has_senior_level', False):
             signal_quality += 2
             quality_reasons.append("✅ Есть сильный уровень на старших ТФ")
         
-        # Проверяем наличие FVG
+        # 2. FVG
         if fvg_analysis.get('has_fvg', False):
             signal_quality += 2
             quality_reasons.append("✅ Есть FVG")
         
-        # Проверяем наличие конфлюенции (2+ уровней)
+        # 3. Конфлюенция (2+ уровней)
         if potential_analysis and potential_analysis.get('level_count', 0) >= 2:
             signal_quality += 2
             quality_reasons.append(f"✅ Есть конфлюенция ({potential_analysis['level_count']} уровней)")
         
-        # Проверяем наличие подтвержденного пробоя
+        # 4. Подтвержденный пробой
         if breakout_confirmed:
             signal_quality += 3
             quality_reasons.append("✅ Есть подтвержденный пробой")
         
-        # Проверяем наличие пробоя наклонного уровня на 5м/15м
+        # 5. Пробой наклонного уровня
         if trendline_breakout_5m or trendline_breakout_15m:
             signal_quality += 2
             quality_reasons.append("✅ Есть пробой наклонного уровня")
         
-        # Проверяем наличие RSI дивергенции
+        # 6. RSI дивергенция
         if rsi_divergence:
             signal_quality += 2
             quality_reasons.append("✅ Есть RSI дивергенция")
         
-        # Проверяем наличие накопления
+        # 7. Накопление
         if accumulation_analysis and accumulation_analysis.get('has_accumulation', False):
             signal_quality += 2
             quality_reasons.append("✅ Есть накопление")
         
+        # ===== НОВЫЕ ПРОВЕРКИ =====
+        
+        # 8. CHoCH (смена тренда)
+        if choch_analysis and choch_analysis.get('has_choch', False):
+            signal_quality += 3
+            quality_reasons.append("✅ Есть CHoCH (смена тренда)")
+        
+        # 9. Premium/Discount зона
+        if pd_analysis and pd_analysis.get('has_zone', False):
+            signal_quality += 2
+            quality_reasons.append(f"✅ {pd_analysis.get('description', 'Premium/Discount зона')}")
+        
+        # 10. EQH/EQL (уровни ликвидности)
+        if equal_analysis and equal_analysis.get('has_equal', False):
+            signal_quality += 1
+            quality_reasons.append("✅ Есть EQH/EQL (уровень ликвидности)")
+        
+        # 11. Паттерны
+        if pattern_analysis and pattern_analysis.get('has_pattern', False):
+            signal_quality += 2
+            quality_reasons.append("✅ Есть графический паттерн")
+        
+        # 12. Order Blocks
+        if hasattr(self, 'smart_money') and self.smart_money:
+            order_blocks = self.smart_money.find_order_blocks(df)
+            if order_blocks:
+                signal_quality += 2
+                quality_reasons.append("✅ Есть Order Block")
+        
+        # 13. Согласованность ТФ (высокая)
+        if tf_alignment.get('percentage', 0) >= 80:
+            signal_quality += 2
+            quality_reasons.append(f"✅ Высокая согласованность ТФ ({tf_alignment['percentage']:.0f}%)")
+        
+        # 14. Имбаланс
+        if imbalance_result and imbalance_result.get('has_imbalance', False):
+            signal_quality += 1
+            quality_reasons.append("✅ Есть имбаланс")
+        
         # Логируем качество
         logger.info(f"  📊 Качество сигнала: {signal_quality}/10")
-        for qr in quality_reasons[:3]:
+        for qr in quality_reasons[:5]:
             logger.info(f"     {qr}")
         
         # Если качество ниже порога — отменяем сигнал
