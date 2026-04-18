@@ -7173,9 +7173,13 @@ class MultiTimeframeAnalyzer:
         
         # Добавляем Order Blocks если есть
         if hasattr(self, 'smart_money') and self.smart_money:
-            order_blocks = self.smart_money.find_order_blocks(df)
-            result['order_blocks'] = order_blocks[:3] if order_blocks else []
-            result['has_order_block'] = len(order_blocks) > 0
+            try:
+                order_blocks = self.smart_money.find_order_blocks(df)
+                result['order_blocks'] = order_blocks[:3] if order_blocks else []
+                result['has_order_block'] = len(order_blocks) > 0
+            except AttributeError:
+                result['order_blocks'] = []
+                result['has_order_block'] = False
         
         # Добавляем Fractals если есть
         if hasattr(self, 'fractal') and self.fractal:
