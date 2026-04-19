@@ -8474,18 +8474,18 @@ class MultiExchangeScannerBot:
             asyncio.create_task(self.daily_report_loop())
     
     async def _load_dataframes_for_signal(self, symbol: str) -> Dict:
-    """Загрузка всех таймфреймов для символа"""
-    dataframes = {}
-    for fetcher in self.fetchers.values():
-        if fetcher.name == 'BingX':
-            for tf_name, tf_value in TIMEFRAMES.items():
-                limit = 100 if tf_name == 'current' else 50
-                df = await fetcher.fetch_ohlcv(symbol, tf_value, limit)
-                if df is not None and not df.empty:
-                    df = self.analyzer.calculate_indicators(df)
-                    dataframes[tf_name] = df
-            break
-    return dataframes
+        """Загрузка всех таймфреймов для символа"""
+        dataframes = {}
+        for fetcher in self.fetchers.values():
+            if fetcher.name == 'BingX':
+                for tf_name, tf_value in TIMEFRAMES.items():
+                    limit = 100 if tf_name == 'current' else 50
+                    df = await fetcher.fetch_ohlcv(symbol, tf_value, limit)
+                    if df is not None and not df.empty:
+                        df = self.analyzer.calculate_indicators(df)
+                        dataframes[tf_name] = df
+                break
+        return dataframes
 
     async def _load_dataframes_for_symbol(self, fetcher: BaseExchangeFetcher, symbol: str) -> Optional[Dict]:
         """Загрузка всех таймфреймов для символа"""
