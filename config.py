@@ -1400,7 +1400,7 @@ TRENDLINE_ANALYSIS_SETTINGS = {
 # ============== НАСТРОЙКИ VIP ПАМП-ДАМП ==============
 VIP_PUMP_SETTINGS = {
     'enabled': True,
-    'min_pump_change': 10.0,
+    'min_pump_change': 5.0,
     'min_confidence': 0,
     'min_volume_ratio': 1.0,
     'cooldown_minutes': 60,
