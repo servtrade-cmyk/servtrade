@@ -1400,26 +1400,33 @@ TRENDLINE_ANALYSIS_SETTINGS = {
 # ============== НАСТРОЙКИ VIP ПАМП-ДАМП ==============
 VIP_PUMP_SETTINGS = {
     'enabled': True,
-    'min_pump_change': 5.0,  # Было 10.0
-    'min_confidence': 30,     # Было 80
-    'min_volume_ratio': 1.0,  # Было 3.0
+    'min_pump_change': 10.0,
+    'min_confidence': 0,
+    'min_volume_ratio': 1.0,
     'cooldown_minutes': 60,
+    'min_indicators': 2,  # ← минимум 2 индикатора из включённых
     
-    # 'indicators': {
-    #     'rsi': {'enabled': True, 'overbought': 80, 'oversold': 20},
-    #     'macd': {'enabled': True, 'require_bullish': True},
-    #     'ema': {'enabled': True},
-    #     'bollinger': {'enabled': True},
-    #     'vwap': {'enabled': True, 'require_above': True, 'require_below': True},  # цена выше VWAP (для LONG), цена ниже VWAP (для SHORT)
-    #     'fvg': {'enabled': True, 'max_distance_pct': 1.0},
-    #     'senior_tf': {'enabled': True, 'min_alignment': 70},
-    #     'patterns': {'enabled': True},
-    #     'accumulation': {'enabled': True},
-    #     'order_blocks': {'enabled': True},
-    #     'premium_discount': {'enabled': True},
-    #     'choch': {'enabled': True},
-    #     'divergence': {'enabled': True},
-    #     'confluence': {'enabled': True, 'min_strength': 50},
-    #     'tf_alignment': {'enabled': True, 'min_percentage': 70},
-    # },
+    'indicators': {
+        'rsi': {'enabled': True, 'overbought': 80, 'oversold': 20},
+        'macd': {'enabled': True, 'require_bullish': True},
+        'ema_touch': {
+            'enabled': True,
+            'timeframes': ['weekly', 'monthly'],  # 1н и 1М
+            'periods': [7, 14, 28, 50, 100],      # EMA 7, 14, 28, 50, 100
+            'max_distance_pct': 0.5,               # Макс расстояние до EMA (0.5%)
+            'require_touch': True,                 # Требовать касание
+        },
+        'bollinger': {'enabled': True},
+        'vwap': {'enabled': True, 'require_above': True, 'require_below': True},  # цена выше VWAP (для LONG), цена ниже VWAP (для SHORT)
+        'fvg': {'enabled': True, 'max_distance_pct': 1.0, 'timeframes': ['4h', '1d', '1w'],},
+        'senior_tf': {'enabled': True, 'min_alignment': 70},
+        'patterns': {'enabled': True},
+        'accumulation': {'enabled': True},
+        'order_blocks': {'enabled': True},
+        'premium_discount': {'enabled': True},
+        'choch': {'enabled': True},
+        'divergence': {'enabled': True},
+        'confluence': {'enabled': True, 'min_strength': 50},
+        'tf_alignment': {'enabled': True, 'min_percentage': 70},
+    },
 }
