@@ -9738,7 +9738,7 @@ class MultiExchangeScannerBot:
                 pump_signals = await self.fast_pump_scan()
                 if pump_signals:
                     for pump in pump_signals:
-                        await self.send_pump_signal(pump, dataframes)
+                        await self.send_pump_signal(pump)
                         await asyncio.sleep(3)
                 
                 if current_time - last_full_scan >= UPDATE_INTERVAL:
