@@ -9260,15 +9260,20 @@ class MultiExchangeScannerBot:
                     )
                     
                     if basic_ok:
-                        indicators_ok = True
                         ind = VIP_PUMP_SETTINGS.get('indicators', {})
+                        
+                        # Считаем количество сработавших индикаторов
+                        indicators_triggered = 0
                         
                         # 1. RSI
                         if ind.get('rsi', {}).get('enabled', False):
                             rsi = signal.get('rsi', 50)
                             rsi_ok = rsi >= ind['rsi'].get('overbought', 80) or rsi <= ind['rsi'].get('oversold', 20)
-                            indicators_ok = indicators_ok and rsi_ok
-                            logger.info(f"  🔍 VIP RSI: {rsi:.1f} -> {'✅' if rsi_ok else '❌'}")
+                            if rsi_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP RSI: {rsi:.1f} -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP RSI: {rsi:.1f} -> ❌")
                         
                         # 2. MACD
                         if ind.get('macd', {}).get('enabled', False):
@@ -9277,10 +9282,153 @@ class MultiExchangeScannerBot:
                                 macd_ok = macd > 0
                             else:
                                 macd_ok = macd < 0
-                            indicators_ok = indicators_ok and macd_ok
-                            logger.info(f"  🔍 VIP MACD: {macd:.4f} -> {'✅' if macd_ok else '❌'}")
+                            if macd_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP MACD: {macd:.4f} -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP MACD: {macd:.4f} -> ❌")
                         
-                        # 3. # Касания EMA на старших ТФ
+                        # 3. EMA тренд
+                        if ind.get('ema', {}).get('enabled', False):
+                            ema_fast = signal.get('ema_9', 0)
+                            ema_slow = signal.get('ema_21', 0)
+                            ema_ok = ema_fast > ema_slow
+                            if ema_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP EMA: {ema_fast:.4f} > {ema_slow:.4f} -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP EMA: {ema_fast:.4f} > {ema_slow:.4f} -> ❌")
+                        
+                        # 4. VWAP
+                        if ind.get('vwap', {}).get('enabled', False):
+                            current_price = signal.get('price', 0)
+                            vwap = signal.get('vwap', 0)
+                            if vwap > 0:
+                                if ind['vwap'].get('require_above', False):
+                                    vwap_ok = current_price > vwap
+                                elif ind['vwap'].get('require_below', False):
+                                    vwap_ok = current_price < vwap
+                                else:
+                                    vwap_ok = True
+                            else:
+                                vwap_ok = True
+                            if vwap_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP VWAP: цена={current_price:.4f}, VWAP={vwap:.4f} -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP VWAP: цена={current_price:.4f}, VWAP={vwap:.4f} -> ❌")
+                        
+                        # 5. Bollinger Bands
+                        if ind.get('bollinger', {}).get('enabled', False):
+                            bb_position = signal.get('bb_position', 0.5)
+                            bb_ok = bb_position > 0.8 or bb_position < 0.2
+                            if bb_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Bollinger: {bb_position:.2f} -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Bollinger: {bb_position:.2f} -> ❌")
+                        
+                        # 6. FVG
+                        if ind.get('fvg', {}).get('enabled', False):
+                            fvg_zones = signal.get('fvg_zones', [])
+                            max_dist = ind['fvg'].get('max_distance_pct', 1.0)
+                            fvg_ok = any(z.get('distance', 999) <= max_dist for z in fvg_zones)
+                            if fvg_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP FVG: {'✅' if fvg_ok else '❌'}")
+                            else:
+                                logger.info(f"  🔍 VIP FVG: ❌")
+                        
+                        # 7. Старшие ТФ
+                        if ind.get('senior_tf', {}).get('enabled', False):
+                            alignment = signal.get('alignment', {}).get('trend_alignment', 0)
+                            min_alignment = ind['senior_tf'].get('min_alignment', 70)
+                            senior_ok = alignment >= min_alignment
+                            if senior_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Старшие ТФ: {alignment}% -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Старшие ТФ: {alignment}% -> ❌")
+                        
+                        # 8. Паттерны
+                        if ind.get('patterns', {}).get('enabled', False):
+                            has_pattern = signal.get('has_pattern', False)
+                            if has_pattern:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Паттерны: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Паттерны: ❌")
+                        
+                        # 9. Накопление
+                        if ind.get('accumulation', {}).get('enabled', False):
+                            has_accumulation = signal.get('accumulation', {}).get('has_accumulation', False)
+                            if has_accumulation:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Накопление: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Накопление: ❌")
+                        
+                        # 10. Order Blocks
+                        if ind.get('order_blocks', {}).get('enabled', False):
+                            has_order_block = signal.get('has_order_block', False)
+                            if has_order_block:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Order Blocks: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Order Blocks: ❌")
+                        
+                        # 11. Premium/Discount
+                        if ind.get('premium_discount', {}).get('enabled', False):
+                            has_premium = signal.get('has_premium_zone', False)
+                            has_discount = signal.get('has_discount_zone', False)
+                            pd_ok = has_premium or has_discount
+                            if pd_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Premium/Discount: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Premium/Discount: ❌")
+                        
+                        # 12. CHoCH
+                        if ind.get('choch', {}).get('enabled', False):
+                            has_choch = signal.get('has_choch', False)
+                            if has_choch:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP CHoCH: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP CHoCH: ❌")
+                        
+                        # 13. Дивергенция
+                        if ind.get('divergence', {}).get('enabled', False):
+                            has_divergence = signal.get('has_divergence', False)
+                            if has_divergence:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Дивергенция: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Дивергенция: ❌")
+                        
+                        # 14. Конфлюенция
+                        if ind.get('confluence', {}).get('enabled', False):
+                            confluence = signal.get('confluence_strength', 0)
+                            min_confluence = ind['confluence'].get('min_strength', 50)
+                            confluence_ok = confluence >= min_confluence
+                            if confluence_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Конфлюенция: {confluence}% -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Конфлюенция: {confluence}% -> ❌")
+                        
+                        # 15. Согласованность ТФ
+                        if ind.get('tf_alignment', {}).get('enabled', False):
+                            tf_alignment = signal.get('tf_alignment_percentage', 0)
+                            min_tf_alignment = ind['tf_alignment'].get('min_percentage', 70)
+                            tf_ok = tf_alignment >= min_tf_alignment
+                            if tf_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Согласованность ТФ: {tf_alignment}% -> ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Согласованность ТФ: {tf_alignment}% -> ❌")
+                        
+                        # 16. Касания EMA на старших ТФ
                         if ind.get('ema_touch', {}).get('enabled', False):
                             ema_cfg = ind['ema_touch']
                             timeframes = ema_cfg.get('timeframes', ['weekly', 'monthly'])
@@ -9307,117 +9455,23 @@ class MultiExchangeScannerBot:
                                     
                                     if distance <= max_distance:
                                         ema_touch_ok = True
-                                        logger.info(f"  🔍 VIP EMA касание: {tf} EMA {period} на {ema_value:.4f} (дист. {distance:.2f}%)")
+                                        logger.info(f"  🔍 VIP EMA касание: {tf} EMA {period} на {ema_value:.4f} (дист. {distance:.2f}%) -> ✅")
                                         break
                                 
                                 if ema_touch_ok:
                                     break
                             
-                            indicators_ok = indicators_ok and ema_touch_ok
-                            logger.info(f"  🔍 VIP EMA Touch: {'✅' if ema_touch_ok else '❌'}")
-
-                        # EMA тренд
-                        if ind.get('ema', {}).get('enabled', False):
-                            ema_fast = signal.get('ema_9', 0)
-                            ema_slow = signal.get('ema_21', 0)
-                            ema_ok = ema_fast > ema_slow
-                            indicators_ok = indicators_ok and ema_ok
-                            logger.info(f"  🔍 VIP EMA: {ema_fast:.4f} > {ema_slow:.4f} -> {'✅' if ema_ok else '❌'}")
-                        
-                        # 4. VWAP
-                        if ind.get('vwap', {}).get('enabled', False):
-                            current_price = signal.get('price', 0)
-                            vwap = signal.get('vwap', 0)
-                            if vwap > 0:
-                                if ind['vwap'].get('require_above', False):
-                                    vwap_ok = current_price > vwap
-                                elif ind['vwap'].get('require_below', False):
-                                    vwap_ok = current_price < vwap
-                                else:
-                                    vwap_ok = True
+                            if ema_touch_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP EMA Touch: ✅")
                             else:
-                                vwap_ok = True
-                            indicators_ok = indicators_ok and vwap_ok
-                            logger.info(f"  🔍 VIP VWAP: цена={current_price:.4f}, VWAP={vwap:.4f} -> {'✅' if vwap_ok else '❌'}")
+                                logger.info(f"  🔍 VIP EMA Touch: ❌")
                         
-                        # 5. Bollinger Bands
-                        if ind.get('bollinger', {}).get('enabled', False):
-                            bb_position = signal.get('bb_position', 0.5)
-                            bb_ok = bb_position > 0.8 or bb_position < 0.2
-                            indicators_ok = indicators_ok and bb_ok
-                            logger.info(f"  🔍 VIP Bollinger: {bb_position:.2f} -> {'✅' if bb_ok else '❌'}")
+                        # Проверяем, сколько индикаторов сработало
+                        min_indicators = VIP_PUMP_SETTINGS.get('min_indicators', 2)
+                        indicators_ok = indicators_triggered >= min_indicators
                         
-                        # 6. FVG
-                        if ind.get('fvg', {}).get('enabled', False):
-                            fvg_zones = signal.get('fvg_zones', [])
-                            max_dist = ind['fvg'].get('max_distance_pct', 1.0)
-                            fvg_ok = any(z.get('distance', 999) <= max_dist for z in fvg_zones)
-                            indicators_ok = indicators_ok and fvg_ok
-                            logger.info(f"  🔍 VIP FVG: {'✅' if fvg_ok else '❌'}")
-                        
-                        # 7. Старшие ТФ
-                        if ind.get('senior_tf', {}).get('enabled', False):
-                            alignment = signal.get('alignment', {}).get('trend_alignment', 0)
-                            min_alignment = ind['senior_tf'].get('min_alignment', 70)
-                            senior_ok = alignment >= min_alignment
-                            indicators_ok = indicators_ok and senior_ok
-                            logger.info(f"  🔍 VIP Старшие ТФ: {alignment}% -> {'✅' if senior_ok else '❌'}")
-                        
-                        # 8. Паттерны
-                        if ind.get('patterns', {}).get('enabled', False):
-                            has_pattern = signal.get('has_pattern', False)
-                            indicators_ok = indicators_ok and has_pattern
-                            logger.info(f"  🔍 VIP Паттерны: {'✅' if has_pattern else '❌'}")
-                        
-                        # 9. Накопление
-                        if ind.get('accumulation', {}).get('enabled', False):
-                            has_accumulation = signal.get('accumulation', {}).get('has_accumulation', False)
-                            indicators_ok = indicators_ok and has_accumulation
-                            logger.info(f"  🔍 VIP Накопление: {'✅' if has_accumulation else '❌'}")
-                        
-                        # 10. Order Blocks
-                        if ind.get('order_blocks', {}).get('enabled', False):
-                            has_order_block = signal.get('has_order_block', False)
-                            indicators_ok = indicators_ok and has_order_block
-                            logger.info(f"  🔍 VIP Order Blocks: {'✅' if has_order_block else '❌'}")
-                        
-                        # 11. Premium/Discount
-                        if ind.get('premium_discount', {}).get('enabled', False):
-                            has_premium = signal.get('has_premium_zone', False)
-                            has_discount = signal.get('has_discount_zone', False)
-                            pd_ok = has_premium or has_discount
-                            indicators_ok = indicators_ok and pd_ok
-                            logger.info(f"  🔍 VIP Premium/Discount: {'✅' if pd_ok else '❌'}")
-                        
-                        # 12. CHoCH
-                        if ind.get('choch', {}).get('enabled', False):
-                            has_choch = signal.get('has_choch', False)
-                            indicators_ok = indicators_ok and has_choch
-                            logger.info(f"  🔍 VIP CHoCH: {'✅' if has_choch else '❌'}")
-                        
-                        # 13. Дивергенция
-                        if ind.get('divergence', {}).get('enabled', False):
-                            has_divergence = signal.get('has_divergence', False)
-                            indicators_ok = indicators_ok and has_divergence
-                            logger.info(f"  🔍 VIP Дивергенция: {'✅' if has_divergence else '❌'}")
-                        
-                        # 14. Конфлюенция
-                        if ind.get('confluence', {}).get('enabled', False):
-                            confluence = signal.get('confluence_strength', 0)
-                            min_confluence = ind['confluence'].get('min_strength', 50)
-                            confluence_ok = confluence >= min_confluence
-                            indicators_ok = indicators_ok and confluence_ok
-                            logger.info(f"  🔍 VIP Конфлюенция: {confluence}% -> {'✅' if confluence_ok else '❌'}")
-                        
-                        # 15. Согласованность ТФ
-                        if ind.get('tf_alignment', {}).get('enabled', False):
-                            tf_alignment = signal.get('tf_alignment_percentage', 0)
-                            min_tf_alignment = ind['tf_alignment'].get('min_percentage', 70)
-                            tf_ok = tf_alignment >= min_tf_alignment
-                            indicators_ok = indicators_ok and tf_ok
-                            logger.info(f"  🔍 VIP Согласованность ТФ: {tf_alignment}% -> {'✅' if tf_ok else '❌'}")
-                        
-                        logger.info(f"🔍 VIP basic_ok: {basic_ok}, indicators_ok: {indicators_ok}, is_vip: {is_vip}")
+                        logger.info(f"  🔍 VIP индикаторов сработало: {indicators_triggered}/{min_indicators} -> {'✅' if indicators_ok else '❌'}")
                         
                         is_vip = indicators_ok
                         logger.info(f"  🔍 VIP результат: {'✅ ДА' if is_vip else '❌ НЕТ'}")
