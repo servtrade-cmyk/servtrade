@@ -4634,8 +4634,12 @@ class ReversionBandsAnalyzer:
         
         return kama
     
-    def calculate(self, df: pd.DataFrame, tf_name: str = '15m') -> Dict:
-        """Расчёт полос на одном таймфрейме"""
+    def calculate(self, df: pd.DataFrame, tf_name: str = '15m', last_signal_bar: int = None) -> Dict:
+        """
+        Расчёт полос Reversion Bands на одном таймфрейме с защитой от дублирования
+        """
+        from config import REVERSION_BANDS_SETTINGS
+        
         result = {
             'tf': tf_name,
             'basis': None,
@@ -4650,15 +4654,17 @@ class ReversionBandsAnalyzer:
         if len(df) < self.length + 1:
             return result
         
-        # Истинный диапазон
+        # Истинный диапазон (True Range)
         df['tr'] = pd.DataFrame({
             'hl': df['high'] - df['low'],
             'hc': abs(df['high'] - df['close'].shift(1)),
             'lc': abs(df['low'] - df['close'].shift(1))
         }).max(axis=1)
         
-        # KAMA от цены и волатильности
+        # KAMA от цены закрытия (базовая линия)
         basis = self._kama(df['close'])
+        
+        # KAMA от истинного диапазона (волатильность)
         rg = self._kama(df['tr'])
         
         # Полосы
@@ -4706,6 +4712,41 @@ class ReversionBandsAnalyzer:
             strength = 55
             signal_desc = f"🟢 Reversion Bands ({tf_name}): касание ближней нижней полосы (LONG)"
         
+        # ===== ЗАЩИТА ОТ ДУБЛИРОВАНИЯ =====
+        cooldown_bars = REVERSION_BANDS_SETTINGS.get('cooldown_bars', 3)
+        require_close_out = REVERSION_BANDS_SETTINGS.get('require_close_out', True)
+        
+        if signal != 0:
+            # 1. Проверка кд (не чаще 1 раза в N свечей)
+            if last_signal_bar is not None:
+                bars_since = len(df) - last_signal_bar
+                if bars_since < cooldown_bars:
+                    signal = 0
+                    signal_desc = ""
+                    logger.info(f"  ⏭️ Reversion Bands ({tf_name}): сигнал пропущен (кд {bars_since} < {cooldown_bars})")
+            
+            # 2. Требуем, чтобы цена вышла из зоны перед новым сигналом
+            if require_close_out and signal != 0:
+                # Проверяем, была ли цена внутри полос за последние N свечей
+                if signal == 1:  # LONG сигнал
+                    was_inside = False
+                    for i in range(-cooldown_bars, -1):
+                        if lower2.iloc[i] < df['close'].iloc[i] < upper2.iloc[i]:
+                            was_inside = True
+                            break
+                else:  # SHORT сигнал
+                    was_inside = False
+                    for i in range(-cooldown_bars, -1):
+                        if lower2.iloc[i] < df['close'].iloc[i] < upper2.iloc[i]:
+                            was_inside = True
+                            break
+                
+                if not was_inside:
+                    signal = 0
+                    signal_desc = ""
+                    logger.info(f"  ⏭️ Reversion Bands ({tf_name}): сигнал пропущен (цена не выходила из зоны)")
+        
+        # Сохраняем результат
         result['basis'] = basis.iloc[-1]
         result['upper1'] = upper1.iloc[-1]
         result['upper2'] = upper2.iloc[-1]
@@ -4724,6 +4765,8 @@ class ReversionBandsAnalyzer:
         """
         Анализ Reversion Bands на всех таймфреймах
         """
+        from config import REVERSION_BANDS_SETTINGS
+        
         result = {
             'has_signal': False,
             'signals': [],
@@ -4733,7 +4776,7 @@ class ReversionBandsAnalyzer:
             'results': {}
         }
         
-        timeframes = ['15m', '1h', '4h', '1d']
+        timeframes = REVERSION_BANDS_SETTINGS.get('timeframes', ['15m', '1h', '4h', '1d'])
         tf_map = {
             '15m': 'current',
             '1h': 'hourly',
@@ -4741,17 +4784,26 @@ class ReversionBandsAnalyzer:
             '1d': 'daily',
         }
         
+        # Хранилище для последних сигналов (можно сохранять в self)
+        if not hasattr(self, '_reversion_last_signal_bars'):
+            self._reversion_last_signal_bars = {}
+        
         for tf_display in timeframes:
             tf_key = tf_map.get(tf_display, tf_display)
             if tf_key not in dataframes or dataframes[tf_key] is None:
                 continue
             
             df = dataframes[tf_key]
-            tf_result = self.calculate(df, tf_display)
+            last_bar = self._reversion_last_signal_bars.get(tf_display)
+            
+            tf_result = self.calculate(df, tf_display, last_bar)
             
             result['results'][tf_display] = tf_result
             
             if tf_result['has_signal']:
+                # Запоминаем индекс сигнала
+                self._reversion_last_signal_bars[tf_display] = len(df)
+                
                 result['has_signal'] = True
                 result['signals'].append(tf_result['signal_desc'])
                 
