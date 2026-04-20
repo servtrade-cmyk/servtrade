@@ -9944,6 +9944,21 @@ class MultiExchangeScannerBot:
                                                 is_vip_reason = True
                                             if vip_indicators.get('tf_alignment', {}).get('enabled', False) and ('Согласованность ТФ' in reason or 'согласованность' in reason):
                                                 is_vip_reason = True
+                                            # Reversion Bands
+                                            if vip_indicators.get('reversion_bands', {}).get('enabled', False) and ('Reversion Bands' in reason or 'касание верхней' in reason or 'касание нижней' in reason):
+                                                is_vip_reason = True
+                                            
+                                            # Пробой уровня
+                                            if vip_indicators.get('breakout', {}).get('enabled', False) and ('Пробой' in reason or 'пробой' in reason):
+                                                is_vip_reason = True
+                                            
+                                            # Наклонные уровни
+                                            if vip_indicators.get('trendline', {}).get('enabled', False) and ('наклонного' in reason or 'трендовой' in reason):
+                                                is_vip_reason = True
+                                            
+                                            # Горизонтальные уровни
+                                            if vip_indicators.get('horizontal_levels', {}).get('enabled', False) and ('горизонтальн' in reason or 'уровень' in reason):
+                                                is_vip_reason = True
                                             
                                             # Если причина не подошла — добавляем только базовые (памп/дамп, направление)
                                             if is_vip_reason or 'пампа' in reason or 'дампа' in reason or 'Направление' in reason:
