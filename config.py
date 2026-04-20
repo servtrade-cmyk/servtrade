@@ -1397,6 +1397,13 @@ TRENDLINE_ANALYSIS_SETTINGS = {
     'base_strength': 10,        # базовая уверенность за пробой
 }
 
+# ============== НАСТРОЙКИ ORDER BLOCKS ==============
+ORDER_BLOCKS_SETTINGS = {
+    'enabled': True,
+    'timeframes': ['1h', '4h', '1d'],  # только 1ч, 4ч, 1д
+    'max_blocks': 3,                   # максимум блоков для отображения
+}
+
 # ============== НАСТРОЙКИ VIP ПАМП-ДАМП ==============
 VIP_PUMP_SETTINGS = {
     'enabled': True,
