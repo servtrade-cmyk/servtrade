@@ -1355,7 +1355,7 @@ FVG_SETTINGS = {
     # Фильтры (работают во всех режимах)
     'min_gap_size_pct': 0.5,          # минимальный размер FVG (0.3%)
     'max_distance_pct': 15.0,         # максимальное расстояние до FVG для отображения
-    'touch_distance_pct': 0.5,        # касание 0.5% до зоны
+    'touch_distance_pct': 0.8,        # касание 0.5% до зоны
 
     # SMC-специфичные фильтры (только для режима 'advanced')
     'use_threshold': True,            # использовать автоматический порог
@@ -1441,5 +1441,20 @@ VIP_PUMP_SETTINGS = {
             'extensions': [-0.18, -0.27, -0.618],
             'max_distance_pct': 0.5,
         },
+        'reversion_bands': {
+            'enabled': True,
+            'min_strength': 70,  # мин сила сигнала для VIP
+        },
     },
+}
+
+# ============== НАСТРОЙКИ REVERSION BANDS ==============
+REVERSION_BANDS_SETTINGS = {
+    'enabled': True,
+    'length': 25,           # Период KAMA
+    'band1': 6,             # Ближняя полоса (множитель)
+    'band2': 8,             # Средняя полоса
+    'band3': 13,            # Дальняя полоса (экстремальная)
+    'timeframes': ['15m', '1h', '4h', '1d'],  # какие ТФ анализировать
+    'strength_multiplier': 1.5,  # Множитель силы сигнала
 }
