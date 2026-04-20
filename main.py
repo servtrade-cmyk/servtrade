@@ -9347,16 +9347,16 @@ class MultiExchangeScannerBot:
                             else:
                                 logger.info(f"  🔍 VIP Bollinger: {bb_position:.2f} -> ❌")
                         
-                        # 6. FVG
+                        # 6. FVG (активен, если есть и не закрыт)
                         if ind.get('fvg', {}).get('enabled', False):
                             fvg_zones = signal.get('fvg_zones', [])
-                            max_dist = ind['fvg'].get('max_distance_pct', 1.0)
-                            fvg_ok = any(z.get('distance', 999) <= max_dist for z in fvg_zones)
+                            # FVG активен, если есть хотя бы одна зона (не закрыта)
+                            fvg_ok = len(fvg_zones) > 0
                             if fvg_ok:
                                 indicators_triggered += 1
-                                logger.info(f"  🔍 VIP FVG: {'✅' if fvg_ok else '❌'}")
+                                logger.info(f"  🔍 VIP FVG: ✅ (активен, {len(fvg_zones)} зон)")
                             else:
-                                logger.info(f"  🔍 VIP FVG: ❌")
+                                logger.info(f"  🔍 VIP FVG: ❌ (нет активных зон)")
                         
                         # 7. Старшие ТФ
                         if ind.get('senior_tf', {}).get('enabled', False):
@@ -9452,7 +9452,7 @@ class MultiExchangeScannerBot:
                             # ✅ Загружаем dataframes для символа
                             if 'dataframes' not in locals():
                                 dataframes = await self._load_dataframes_for_signal(signal['symbol'])
-                                
+
                             ema_cfg = ind['ema_touch']
                             timeframes = ema_cfg.get('timeframes', ['weekly', 'monthly'])
                             periods = ema_cfg.get('periods', [7, 14, 28, 50, 100])
@@ -9489,6 +9489,44 @@ class MultiExchangeScannerBot:
                                 logger.info(f"  🔍 VIP EMA Touch: ✅")
                             else:
                                 logger.info(f"  🔍 VIP EMA Touch: ❌")
+
+                        # 17. Фибоначчи (по вашим настройкам)
+                        if ind.get('fibonacci', {}).get('enabled', False):
+                            fib_cfg = ind['fibonacci']
+                            fib_levels = fib_cfg.get('levels', [0.236, 0.382, 0.5, 0.618, 0.786, 0.86])
+                            fib_extensions = fib_cfg.get('extensions', [-0.18, -0.27, -0.618])
+                            all_fib_levels = fib_levels + fib_extensions
+                            max_distance = fib_cfg.get('max_distance_pct', 0.5) / 100
+                            
+                            fib_ok = False
+                            current_price = signal.get('price', 0)
+                            fib_data = signal.get('fibonacci', {})
+                            
+                            # Проверяем уровни Фибоначчи из сигнала
+                            for tf_name, tf_data in fib_data.items():
+                                if tf_data and isinstance(tf_data, dict) and 'levels' in tf_data:
+                                    for level_key, level_data in tf_data['levels'].items():
+                                        try:
+                                            level_val = float(level_key)
+                                            # Проверяем, входит ли уровень в наши настройки
+                                            if level_val in all_fib_levels:
+                                                level_price = level_data.get('price', 0)
+                                                if level_price > 0:
+                                                    distance = abs(current_price - level_price) / current_price
+                                                    if distance <= max_distance:
+                                                        fib_ok = True
+                                                        logger.info(f"  🔍 VIP Фибоначчи: уровень {level_val*100:.1f}% на {tf_name} = {level_price:.4f} (дист. {distance*100:.2f}%) -> ✅")
+                                                        break
+                                        except (ValueError, TypeError):
+                                            continue
+                                if fib_ok:
+                                    break
+                            
+                            if fib_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Фибоначчи: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Фибоначчи: ❌")
                         
                         # Проверяем, сколько индикаторов сработало
                         min_indicators = VIP_PUMP_SETTINGS.get('min_indicators', 2)
@@ -9511,6 +9549,53 @@ class MultiExchangeScannerBot:
                                 else:
                                     # VIP отправка с графиком
                                     try:
+                                        # ✅ Фильтруем причины только для VIP
+                                        vip_indicators = VIP_PUMP_SETTINGS.get('indicators', {})
+                                        vip_reasons = []
+                                        
+                                        for reason in signal.get('reasons', []):
+                                            # Проверяем, относится ли причина к включённым индикаторам
+                                            is_vip_reason = False
+                                            
+                                            if vip_indicators.get('rsi', {}).get('enabled', False) and 'RSI' in reason:
+                                                is_vip_reason = True
+                                            if vip_indicators.get('macd', {}).get('enabled', False) and 'MACD' in reason:
+                                                is_vip_reason = True
+                                            if vip_indicators.get('ema_touch', {}).get('enabled', False) and ('EMA' in reason or 'касание' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('bollinger', {}).get('enabled', False) and ('Bollinger' in reason or 'BB' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('vwap', {}).get('enabled', False) and 'VWAP' in reason:
+                                                is_vip_reason = True
+                                            if vip_indicators.get('fvg', {}).get('enabled', False) and 'FVG' in reason:
+                                                is_vip_reason = True
+                                            if vip_indicators.get('senior_tf', {}).get('enabled', False) and ('старших ТФ' in reason or 'уровней на старших' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('patterns', {}).get('enabled', False) and ('паттерн' in reason or 'вершина' in reason or 'ФЛАГ' in reason or 'КЛИН' in reason or 'Голова' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('accumulation', {}).get('enabled', False) and ('Накопление' in reason or 'аккумуляция' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('order_blocks', {}).get('enabled', False) and ('Order Block' in reason or 'OB' in reason or 'ордер-блок' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('premium_discount', {}).get('enabled', False) and ('Premium' in reason or 'Discount' in reason or 'зона' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('choch', {}).get('enabled', False) and ('CHoCH' in reason or 'смена тренда' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('divergence', {}).get('enabled', False) and ('дивергенция' in reason or 'Divergence' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('confluence', {}).get('enabled', False) and ('конфлюенция' in reason or 'СХОЖДЕНИЕ' in reason):
+                                                is_vip_reason = True
+                                            if vip_indicators.get('tf_alignment', {}).get('enabled', False) and ('Согласованность ТФ' in reason or 'согласованность' in reason):
+                                                is_vip_reason = True
+                                            
+                                            # Если причина не подошла — добавляем только базовые (памп/дамп, направление)
+                                            if is_vip_reason or 'пампа' in reason or 'дампа' in reason or 'Направление' in reason:
+                                                vip_reasons.append(reason)
+                                        
+                                        # Заменяем причины в сигнале на отфильтрованные
+                                        signal['reasons'] = vip_reasons
+                                        
+                                        # Формируем сообщение с отфильтрованными причинами
                                         if df is not None and not df.empty:
                                             df = self.analyzer.calculate_indicators(df)
                                             chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
