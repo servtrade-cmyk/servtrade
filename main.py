@@ -4595,6 +4595,172 @@ class SMCFvgAnalyzer:
         
         return result
 
+class ReversionBandsAnalyzer:
+    """
+    Анализатор Reversion Bands (Tobacco Channel / Cuban's Reversion Bands)
+    """
+    
+    def __init__(self, length: int = 25, band1: int = 6, band2: int = 8, band3: int = 12):
+        self.length = length
+        self.band1 = band1
+        self.band2 = band2
+        self.band3 = band3
+    
+    def _kama(self, series: pd.Series, length: int = None) -> pd.Series:
+        """Расчёт KAMA (Kaufman's Adaptive Moving Average)"""
+        if length is None:
+            length = self.length
+        
+        kama = pd.Series(index=series.index, dtype=float)
+        fast_sc = 0.288
+        slow_sc = 0.0666
+        
+        for i in range(len(series)):
+            if i < length:
+                kama.iloc[i] = series.iloc[i]
+                continue
+            
+            change = abs(series.iloc[i] - series.iloc[i - length])
+            volatility = sum(abs(series.iloc[i - j] - series.iloc[i - j - 1]) for j in range(1, length + 1))
+            er = change / volatility if volatility != 0 else 0
+            
+            sc = pow((fast_sc - slow_sc) * er + slow_sc, 2)
+            
+            if i == length:
+                kama.iloc[i] = series.iloc[i]
+            else:
+                kama.iloc[i] = kama.iloc[i - 1] + sc * (series.iloc[i] - kama.iloc[i - 1])
+        
+        return kama
+    
+    def calculate(self, df: pd.DataFrame, tf_name: str = '15m') -> Dict:
+        """Расчёт полос на одном таймфрейме"""
+        result = {
+            'tf': tf_name,
+            'basis': None,
+            'upper1': None, 'upper2': None, 'upper3': None,
+            'lower1': None, 'lower2': None, 'lower3': None,
+            'signal': 0,
+            'strength': 0,
+            'signal_desc': '',
+            'has_signal': False
+        }
+        
+        if len(df) < self.length + 1:
+            return result
+        
+        # Истинный диапазон
+        df['tr'] = pd.DataFrame({
+            'hl': df['high'] - df['low'],
+            'hc': abs(df['high'] - df['close'].shift(1)),
+            'lc': abs(df['low'] - df['close'].shift(1))
+        }).max(axis=1)
+        
+        # KAMA от цены и волатильности
+        basis = self._kama(df['close'])
+        rg = self._kama(df['tr'])
+        
+        # Полосы
+        upper1 = basis + rg * self.band1
+        upper2 = basis + rg * self.band2
+        upper3 = basis + rg * self.band3
+        lower1 = basis - rg * self.band1
+        lower2 = basis - rg * self.band2
+        lower3 = basis - rg * self.band3
+        
+        current_price = df['close'].iloc[-1]
+        current_high = df['high'].iloc[-1]
+        current_low = df['low'].iloc[-1]
+        
+        # Генерация сигналов
+        signal = 0
+        strength = 0
+        signal_desc = ''
+        
+        # SHORT сигналы (верхние полосы)
+        if current_high >= upper3.iloc[-1]:
+            signal = -1
+            strength = 85
+            signal_desc = f"🔻 Reversion Bands ({tf_name}): касание верхней полосы (SHORT)"
+        elif current_high >= upper2.iloc[-1]:
+            signal = -1
+            strength = 70
+            signal_desc = f"🔻 Reversion Bands ({tf_name}): касание средней верхней полосы (SHORT)"
+        elif current_high >= upper1.iloc[-1]:
+            signal = -1
+            strength = 55
+            signal_desc = f"🔻 Reversion Bands ({tf_name}): касание ближней верхней полосы (SHORT)"
+        
+        # LONG сигналы (нижние полосы)
+        if current_low <= lower3.iloc[-1]:
+            signal = 1
+            strength = 85
+            signal_desc = f"🟢 Reversion Bands ({tf_name}): касание нижней полосы (LONG)"
+        elif current_low <= lower2.iloc[-1]:
+            signal = 1
+            strength = 70
+            signal_desc = f"🟢 Reversion Bands ({tf_name}): касание средней нижней полосы (LONG)"
+        elif current_low <= lower1.iloc[-1]:
+            signal = 1
+            strength = 55
+            signal_desc = f"🟢 Reversion Bands ({tf_name}): касание ближней нижней полосы (LONG)"
+        
+        result['basis'] = basis.iloc[-1]
+        result['upper1'] = upper1.iloc[-1]
+        result['upper2'] = upper2.iloc[-1]
+        result['upper3'] = upper3.iloc[-1]
+        result['lower1'] = lower1.iloc[-1]
+        result['lower2'] = lower2.iloc[-1]
+        result['lower3'] = lower3.iloc[-1]
+        result['signal'] = signal
+        result['strength'] = strength
+        result['signal_desc'] = signal_desc
+        result['has_signal'] = signal != 0
+        
+        return result
+    
+    def analyze_multi_timeframe(self, dataframes: Dict[str, pd.DataFrame]) -> Dict:
+        """
+        Анализ Reversion Bands на всех таймфреймах
+        """
+        result = {
+            'has_signal': False,
+            'signals': [],
+            'best_signal': None,
+            'strength': 0,
+            'direction': None,
+            'results': {}
+        }
+        
+        timeframes = ['15m', '1h', '4h', '1d']
+        tf_map = {
+            '15m': 'current',
+            '1h': 'hourly',
+            '4h': 'four_hourly',
+            '1d': 'daily',
+        }
+        
+        for tf_display in timeframes:
+            tf_key = tf_map.get(tf_display, tf_display)
+            if tf_key not in dataframes or dataframes[tf_key] is None:
+                continue
+            
+            df = dataframes[tf_key]
+            tf_result = self.calculate(df, tf_display)
+            
+            result['results'][tf_display] = tf_result
+            
+            if tf_result['has_signal']:
+                result['has_signal'] = True
+                result['signals'].append(tf_result['signal_desc'])
+                
+                if tf_result['strength'] > result['strength']:
+                    result['strength'] = tf_result['strength']
+                    result['best_signal'] = tf_result
+                    result['direction'] = 'LONG' if tf_result['signal'] == 1 else 'SHORT'
+        
+        return result
+
 # ============== МУЛЬТИТАЙМФРЕЙМ АНАЛИЗАТОР ==============
 
 class MultiTimeframeAnalyzer:
@@ -4624,6 +4790,7 @@ class MultiTimeframeAnalyzer:
         self.pattern_analyzer = PatternAnalyzer()
         self.smc_fvg_analyzer = SMCFvgAnalyzer()
         self.smart_money = SmartMoneyAnalyzer()
+        self.reversion_bands = ReversionBandsAnalyzer()
 
     def set_fibonacci(self, fib_analyzer):
         self.fibonacci = fib_analyzer
@@ -6592,6 +6759,29 @@ class MultiTimeframeAnalyzer:
             reasons.insert(0, equal_analysis['description'])  # ← стало
             confidence += 10
 
+        # ===== REVERSION BANDS АНАЛИЗ (МУЛЬТИТАЙМФРЕЙМ) =====
+        reversion_result = None
+        if REVERSION_BANDS_SETTINGS.get('enabled', True):
+            try:
+                logger.info(f"  🔍 {symbol} - Анализ Reversion Bands (многоТФ)")
+                reversion_result = self.reversion_bands.analyze_multi_timeframe(dataframes)
+                
+                if reversion_result['has_signal']:
+                    for signal_desc in reversion_result['signals'][:3]:
+                        reasons.append(signal_desc)
+                    confidence += reversion_result['strength'] / 5
+                    
+                    # Корректируем направление (если сигнал сильный)
+                    if reversion_result['direction']:
+                        old_dir = direction
+                        direction = reversion_result['direction']
+                        if old_dir != direction:
+                            logger.info(f"  🎯 Направление от Reversion Bands: {old_dir} → {direction}")
+                    
+                    logger.info(f"  ✅ {symbol} - Reversion Bands сигнал: {reversion_result['best_signal']['signal_desc'] if reversion_result['best_signal'] else ''}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка в Reversion Bands для {symbol}: {e}")
+
         # ===== ЗОНЫ ЛИКВИДНОСТИ =====              
         if LIQUIDITY_ZONES_SETTINGS.get('enabled', True):
             try:
@@ -7319,6 +7509,11 @@ class MultiTimeframeAnalyzer:
             result['fvg_zones'] = fvg_analysis['zones']
             logger.info(f"  🎨 Добавлено {len(fvg_analysis['zones'])} FVG зон для графика")
         
+        # Reversion Bands
+        if reversion_result:
+            result['reversion_bands'] = reversion_result
+            result['reversion_signal'] = reversion_result.get('best_signal', {}).get('signal', 0) if reversion_result else 0
+
         # Добавляем зоны дисперсии для графика
         if DISPERSION_ANALYSIS_SETTINGS['enabled'] and 'dispersion_zones' in locals() and dispersion_zones:
             result['dispersion_zones'] = dispersion_zones
@@ -9594,6 +9789,17 @@ class MultiExchangeScannerBot:
                             else:
                                 logger.info(f"  🔍 VIP Фибоначчи: ❌")
                         
+                        # 18. Reversion Bands
+                        if ind.get('reversion_bands', {}).get('enabled', False):
+                            reversion_signal = signal.get('reversion_signal', 0)
+                            min_strength = ind['reversion_bands'].get('min_strength', 70)
+                            reversion_ok = reversion_signal != 0
+                            if reversion_ok:
+                                indicators_triggered += 1
+                                logger.info(f"  🔍 VIP Reversion Bands: ✅")
+                            else:
+                                logger.info(f"  🔍 VIP Reversion Bands: ❌")
+
                         # Проверяем, сколько индикаторов сработало
                         min_indicators = VIP_PUMP_SETTINGS.get('min_indicators', 2)
                         indicators_ok = indicators_triggered >= min_indicators
