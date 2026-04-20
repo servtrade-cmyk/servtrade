@@ -5655,6 +5655,60 @@ class MultiTimeframeAnalyzer:
         
         return None
 
+    def find_order_blocks_multi_timeframe(self, dataframes: Dict[str, pd.DataFrame]) -> Dict:
+        """
+        Поиск Order Blocks на всех таймфреймах (1ч, 4ч, 1д)
+        """
+        from config import ORDER_BLOCKS_SETTINGS
+        
+        result = {
+            'has_order_block': False,
+            'blocks': [],
+            'strength': 0,
+            'timeframes': []
+        }
+        
+        if not ORDER_BLOCKS_SETTINGS.get('enabled', True):
+            return result
+        
+        timeframes = ORDER_BLOCKS_SETTINGS.get('timeframes', ['1h', '4h', '1d'])
+        max_blocks = ORDER_BLOCKS_SETTINGS.get('max_blocks', 3)
+        
+        tf_map = {
+            '1h': 'hourly',
+            '4h': 'four_hourly',
+            '1d': 'daily',
+        }
+        
+        tf_display = {
+            '1h': '1ч',
+            '4h': '4ч',
+            '1d': '1д',
+        }
+        
+        for tf in timeframes:
+            tf_key = tf_map.get(tf, tf)
+            if tf_key not in dataframes or dataframes[tf_key] is None:
+                continue
+            
+            df = dataframes[tf_key]
+            
+            # Создаём временный SMC анализатор
+            smc_temp = SmartMoneyAnalyzer(SMC_SETTINGS)
+            blocks = smc_temp.find_order_blocks(df)
+            
+            for block in blocks[:max_blocks]:
+                block['timeframe'] = tf_display.get(tf, tf)
+                result['blocks'].append(block)
+                result['strength'] += block.get('strength', 50)
+                result['timeframes'].append(tf_display.get(tf, tf))
+        
+        if result['blocks']:
+            result['has_order_block'] = True
+            result['strength'] = min(100, result['strength'] // len(result['blocks']))
+        
+        return result
+
     def generate_signal(self, dataframes: Dict[str, pd.DataFrame], metadata: Dict, symbol: str, exchange: str) -> Optional[Dict]:
         """
         Генерация торгового сигнала на основе всех индикаторов
@@ -5678,6 +5732,14 @@ class MultiTimeframeAnalyzer:
         reasons = []
         direction = 'NEUTRAL'
         signal_type = 'regular'
+
+        # ===== ORDER BLOCKS НА СТАРШИХ ТАЙМФРЕЙМАХ (1ч, 4ч, 1д) =====
+        order_blocks_analysis = self.find_order_blocks_multi_timeframe(dataframes)
+        if order_blocks_analysis.get('has_order_block', False):
+            for block in order_blocks_analysis['blocks'][:2]:
+                reasons.append(f"📦 {block.get('description', 'Order Block')} на {block.get('timeframe', '?')}")
+            confidence += order_blocks_analysis['strength'] / 10
+            logger.info(f"  ✅ {symbol} - Найдено Order Blocks: {len(order_blocks_analysis['blocks'])}")
 
         # ===== ОПРЕДЕЛЕНИЕ ТАЙМФРЕЙМА ДЛЯ ТЕКУЩЕГО ТИПА СИГНАЛА =====
         from config import SIGNAL_TIMEFRAMES
@@ -7228,15 +7290,19 @@ class MultiTimeframeAnalyzer:
             **targets
         }
         
-        # Добавляем Order Blocks если есть
-        if hasattr(self, 'smart_money') and self.smart_money:
-            try:
-                order_blocks = self.smart_money.find_order_blocks(df)
-                result['order_blocks'] = order_blocks[:3] if order_blocks else []
-                result['has_order_block'] = len(order_blocks) > 0
-            except AttributeError:
-                result['order_blocks'] = []
-                result['has_order_block'] = False
+        # Order Blocks анализ
+        result['order_blocks_analysis'] = order_blocks_analysis
+        result['has_order_block'] = order_blocks_analysis.get('has_order_block', False)
+
+        # # Добавляем Order Blocks если есть
+        # if hasattr(self, 'smart_money') and self.smart_money:
+        #     try:
+        #         order_blocks = self.smart_money.find_order_blocks(df)
+        #         result['order_blocks'] = order_blocks[:3] if order_blocks else []
+        #         result['has_order_block'] = len(order_blocks) > 0
+        #     except AttributeError:
+        #         result['order_blocks'] = []
+        #         result['has_order_block'] = False
         
         # Добавляем Fractals если есть
         if hasattr(self, 'fractal') and self.fractal:
