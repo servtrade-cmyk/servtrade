@@ -5695,7 +5695,7 @@ class MultiTimeframeAnalyzer:
             
             # Создаём временный SMC анализатор
             smc_temp = SmartMoneyAnalyzer(SMC_SETTINGS)
-            blocks = smc_temp.find_order_blocks_improved(df)
+            blocks = smc_temp.find_order_blocks_improved(df, tf_display.get(tf, tf))
             
             for block in blocks[:max_blocks]:
                 block['timeframe'] = tf_display.get(tf, tf)
