@@ -1409,7 +1409,7 @@ VIP_PUMP_SETTINGS = {
     'enabled': True,
     'min_pump_change': 7.0,
     'min_confidence': 0,
-    'min_volume_ratio': 2.0,
+    'min_volume_ratio': 1.0,
     'cooldown_minutes': 5,
     'min_indicators': 2,
     
