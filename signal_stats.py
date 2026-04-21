@@ -37,7 +37,7 @@ class SignalStatistics:
                 'signals': {},
                 'statistics': {
                     'total_signals': 0,
-                    'by_type': {'regular': 0, 'pump': 0, 'accumulation': 0},
+                    'by_type': {'regular': 0, 'pump': 0, 'accumulation': 0, 'vip_pump': 0, 'discovery': 0},
                     'by_power': {},
                     'by_pair': {},
                     'daily_stats': {}
@@ -170,7 +170,7 @@ class SignalStatistics:
             'profit': 0,
             'loss': 0,
             'pending': 0,
-            'by_type': {'regular': 0, 'pump': 0, 'accumulation': 0},
+            'by_type': {'regular': 0, 'pump': 0, 'accumulation': 0, 'vip_pump': 0, 'discovery': 0},
             'by_power': defaultdict(lambda: {'total': 0, 'victory': 0, 'profit': 0, 'loss': 0}),
             'by_pair': defaultdict(lambda: {'total': 0, 'success': 0, 'profit_sum': 0}),
             'total_profit': 0,
