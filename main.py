@@ -9917,6 +9917,15 @@ class MultiExchangeScannerBot:
                         logger.info(f"  🔍 Проверка кд для {coin}: {coin in self.last_vip_signal_time if hasattr(self, 'last_vip_signal_time') else 'False (нет словаря)'}")
 
                         if is_vip:                            
+                            # ✅ ДОБАВИТЬ ЭТИ 6 СТРОК (получаем данные для VIP)
+                            contract_info = None
+                            df = None
+                            for fetcher in self.fetchers.values():
+                                if fetcher.name == signal['exchange']:
+                                    contract_info = await fetcher.fetch_contract_info(signal['symbol'])
+                                    df = await fetcher.fetch_ohlcv(signal['symbol'], TIMEFRAMES.get('current', '15m'), limit=200)
+                                    break
+                            
                             if coin in self.last_vip_signal_time:
                                 time_diff = (current_time - self.last_vip_signal_time[coin]).total_seconds() / 60
                                 if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
