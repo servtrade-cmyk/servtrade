@@ -10025,9 +10025,16 @@ class MultiExchangeScannerBot:
                                     signal['reasons'] = vip_reasons
                                     filtered_msg, _ = self.format_pump_message(signal, contract_info)
                                     
-                                    if df is not None and not df.empty:
-                                        df = self.analyzer.calculate_indicators(df)
-                                        chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
+                                    # ✅ Загружаем данные для графика
+                                    df_local = None
+                                    for fetcher in self.fetchers.values():
+                                        if fetcher.name == signal['exchange']:
+                                            df_local = await fetcher.fetch_ohlcv(signal['symbol'], TIMEFRAMES.get('current', '15m'), limit=200)
+                                            break
+                                    
+                                    if df_local is not None and not df_local.empty:
+                                        df_local = self.analyzer.calculate_indicators(df_local)
+                                        chart_buf = self.chart_generator.create_chart(df_local, signal, coin, TIMEFRAMES.get('current', '15m'))
                                         
                                         await self.telegram_bot.send_photo(
                                             chat_id=VIP_PUMP_CHAT_ID,
