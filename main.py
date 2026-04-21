@@ -9997,7 +9997,8 @@ class MultiExchangeScannerBot:
                                         logger.info(f"  🔍 signal['entry_zones'] перед форматированием: {signal.get('entry_zones', [])}")
 
                                         # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
-                                        filtered_msg, _ = self.format_pump_message(signal, contract_info)
+                                        pump_percent = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
+                                        filtered_msg, _ = self.format_message(signal, contract_info, pump_percent)
                                         
                                         # Отправляем VIP сигнал с НОВЫМ сообщением
                                         if df is not None and not df.empty:
@@ -10034,7 +10035,9 @@ class MultiExchangeScannerBot:
                                     
                                     # ✅ Сначала фильтруем причины
                                     signal['reasons'] = vip_reasons
-                                    filtered_msg, _ = self.format_pump_message(signal, contract_info)
+                                    # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
+                                    pump_percent = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
+                                    filtered_msg, _ = self.format_message(signal, contract_info, pump_percent)
                                     
                                     # ✅ Загружаем данные для графика
                                     df_local = None
