@@ -9903,161 +9903,114 @@ class MultiExchangeScannerBot:
                         is_vip = indicators_ok
                         logger.info(f"  🔍 VIP результат: {'✅ ДА' if is_vip else '❌ НЕТ'}")
                         
-                        # ✅ ДОБАВИТЬ СЮДА
                         logger.info(f"  🔍 ВОШЛИ В VIP БЛОК для {coin}, is_vip={is_vip}")
                         logger.info(f"  🔍 is_vip = {is_vip}")
                         logger.info(f"  🔍 Проверка кд для {coin}: {coin in self.last_vip_signal_time if hasattr(self, 'last_vip_signal_time') else 'False (нет словаря)'}")
 
                         if is_vip:
-                            # Проверка кд для VIP
+                            # ✅ 1. ФИЛЬТРУЕМ ПРИЧИНЫ (ОДИН РАЗ ДЛЯ ВСЕХ)
+                            vip_indicators = VIP_PUMP_SETTINGS.get('indicators', {})
+                            vip_reasons = []
+                            
+                            for reason in signal.get('reasons', []):
+                                is_vip_reason = False
+                                
+                                if vip_indicators.get('rsi', {}).get('enabled', False) and 'RSI' in reason:
+                                    is_vip_reason = True
+                                if vip_indicators.get('macd', {}).get('enabled', False) and 'MACD' in reason:
+                                    is_vip_reason = True
+                                if vip_indicators.get('ema_touch', {}).get('enabled', False) and ('EMA' in reason or 'касание' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('bollinger', {}).get('enabled', False) and ('Bollinger' in reason or 'BB' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('vwap', {}).get('enabled', False) and 'VWAP' in reason:
+                                    is_vip_reason = True
+                                if vip_indicators.get('fvg', {}).get('enabled', False) and 'FVG' in reason:
+                                    is_vip_reason = True
+                                if vip_indicators.get('senior_tf', {}).get('enabled', False) and ('старших ТФ' in reason or 'уровней на старших' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('patterns', {}).get('enabled', False) and ('паттерн' in reason or 'вершина' in reason or 'ФЛАГ' in reason or 'КЛИН' in reason or 'Голова' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('accumulation', {}).get('enabled', False) and ('Накопление' in reason or 'аккумуляция' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('order_blocks', {}).get('enabled', False) and ('Order Block' in reason or 'OB' in reason or 'ордер-блок' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('premium_discount', {}).get('enabled', False) and ('Premium' in reason or 'Discount' in reason or 'зона' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('choch', {}).get('enabled', False) and ('CHoCH' in reason or 'смена тренда' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('divergence', {}).get('enabled', False) and ('дивергенция' in reason or 'Divergence' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('confluence', {}).get('enabled', False) and ('конфлюенция' in reason or 'СХОЖДЕНИЕ' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('tf_alignment', {}).get('enabled', False) and ('Согласованность ТФ' in reason or 'согласованность' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('reversion_bands', {}).get('enabled', False) and ('Reversion Bands' in reason or 'касание верхней' in reason or 'касание нижней' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('breakout', {}).get('enabled', False) and ('Пробой' in reason or 'пробой' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('trendline', {}).get('enabled', False) and ('наклонного' in reason or 'трендовой' in reason):
+                                    is_vip_reason = True
+                                if vip_indicators.get('horizontal_levels', {}).get('enabled', False) and ('горизонтальн' in reason or 'уровень' in reason):
+                                    is_vip_reason = True
+                                
+                                if is_vip_reason or 'пампа' in reason or 'дампа' in reason or 'Направление' in reason:
+                                    vip_reasons.append(reason)
+                            
+                            # Заменяем причины в сигнале
+                            signal['reasons'] = vip_reasons
+                            
+                            logger.info(f"  🔍 VIP причины ПОСЛЕ фильтра: {vip_reasons[:5]}")
+                            
+                            # ✅ 2. ПРОВЕРКА КД
                             if not hasattr(self, 'last_vip_signal_time'):
                                 self.last_vip_signal_time = {}
                             
+                            # ✅ 3. ОТПРАВКА
                             if coin in self.last_vip_signal_time:
                                 time_diff = (current_time - self.last_vip_signal_time[coin]).total_seconds() / 60
                                 if time_diff < VIP_PUMP_SETTINGS.get('cooldown_minutes', 60):
                                     logger.info(f"⏭️ VIP {coin}: кд {time_diff:.0f} мин")
                                 else:
-                                    # VIP отправка с графиком
-                                    try:
-                                        # ✅ Фильтруем причины только для VIP
-                                        vip_indicators = VIP_PUMP_SETTINGS.get('indicators', {})
-                                        vip_reasons = []
-                                        
-                                        for reason in signal.get('reasons', []):
-                                            # Проверяем, относится ли причина к включённым индикаторам
-                                            is_vip_reason = False
-                                            
-                                            if vip_indicators.get('rsi', {}).get('enabled', False) and 'RSI' in reason:
-                                                is_vip_reason = True
-                                            if vip_indicators.get('macd', {}).get('enabled', False) and 'MACD' in reason:
-                                                is_vip_reason = True
-                                            if vip_indicators.get('ema_touch', {}).get('enabled', False) and ('EMA' in reason or 'касание' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('bollinger', {}).get('enabled', False) and ('Bollinger' in reason or 'BB' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('vwap', {}).get('enabled', False) and 'VWAP' in reason:
-                                                is_vip_reason = True
-                                            if vip_indicators.get('fvg', {}).get('enabled', False) and 'FVG' in reason:
-                                                is_vip_reason = True
-                                            if vip_indicators.get('senior_tf', {}).get('enabled', False) and ('старших ТФ' in reason or 'уровней на старших' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('patterns', {}).get('enabled', False) and ('паттерн' in reason or 'вершина' in reason or 'ФЛАГ' in reason or 'КЛИН' in reason or 'Голова' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('accumulation', {}).get('enabled', False) and ('Накопление' in reason or 'аккумуляция' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('order_blocks', {}).get('enabled', False) and ('Order Block' in reason or 'OB' in reason or 'ордер-блок' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('premium_discount', {}).get('enabled', False) and ('Premium' in reason or 'Discount' in reason or 'зона' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('choch', {}).get('enabled', False) and ('CHoCH' in reason or 'смена тренда' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('divergence', {}).get('enabled', False) and ('дивергенция' in reason or 'Divergence' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('confluence', {}).get('enabled', False) and ('конфлюенция' in reason or 'СХОЖДЕНИЕ' in reason):
-                                                is_vip_reason = True
-                                            if vip_indicators.get('tf_alignment', {}).get('enabled', False) and ('Согласованность ТФ' in reason or 'согласованность' in reason):
-                                                is_vip_reason = True
-                                            # Reversion Bands
-                                            if vip_indicators.get('reversion_bands', {}).get('enabled', False) and ('Reversion Bands' in reason or 'касание верхней' in reason or 'касание нижней' in reason):
-                                                is_vip_reason = True
-
-                                            # Пробой уровня
-                                            if vip_indicators.get('breakout', {}).get('enabled', False) and ('Пробой' in reason or 'пробой' in reason):
-                                                is_vip_reason = True
-
-                                            # Наклонные уровни
-                                            if vip_indicators.get('trendline', {}).get('enabled', False) and ('наклонного' in reason or 'трендовой' in reason):
-                                                is_vip_reason = True
-
-                                            # Горизонтальные уровни
-                                            if vip_indicators.get('horizontal_levels', {}).get('enabled', False) and ('горизонтальн' in reason or 'уровень' in reason):
-                                                is_vip_reason = True
-
-                                            # Если причина не подошла — добавляем только базовые (памп/дамп, направление)
-                                            if is_vip_reason or 'пампа' in reason or 'дампа' in reason or 'Направление' in reason:
-                                                vip_reasons.append(reason)
-                                        
-                                        # Заменяем причины в сигнале на отфильтрованные
-                                        signal['reasons'] = vip_reasons
-                                        
-                                        # ✅ ЛОГИРОВАНИЕ (ПОСЛЕ ЗАМЕНЫ)
-                                        logger.info(f"  🔍 VIP причины ПОСЛЕ фильтра (vip_reasons): {vip_reasons[:5]}")
-                                        logger.info(f"  🔍 signal['reasons'] после замены: {signal['reasons'][:5]}")
-
-                                        # Логирование entry_zones
-                                        logger.info(f"  🔍 signal['entry_zones'] перед форматированием: {signal.get('entry_zones', [])}")
-
-                                        # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
-                                        filtered_msg, _ = self.format_pump_message(signal, contract_info)
-                                        
-                                        # Отправляем VIP сигнал с НОВЫМ сообщением
-                                        if df is not None and not df.empty:
-                                            df = self.analyzer.calculate_indicators(df)
-                                            chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
-                                            
-                                            await self.telegram_bot.send_photo(
-                                                chat_id=VIP_PUMP_CHAT_ID,
-                                                photo=chart_buf,
-                                                caption=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
-                                                parse_mode='HTML',
-                                                reply_markup=pump_data['keyboard']
-                                            )
-                                            logger.info(f"✅ Отправлен VIP сигнал с графиком: {signal['symbol']}")
-                                        else:
-                                            await self.telegram_bot.send_message(
-                                                chat_id=VIP_PUMP_CHAT_ID,
-                                                text=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
-                                                parse_mode='HTML',
-                                                reply_markup=pump_data['keyboard']
-                                            )
-                                            logger.info(f"✅ Отправлен VIP сигнал (без графика): {signal['symbol']}")
-                                    except Exception as e:
-                                        logger.error(f"❌ Ошибка отправки VIP сигнала: {e}")
-                                    
+                                    await self._send_vip_signal(signal, coin, pump_data, contract_info, df)
                                     self.last_vip_signal_time[coin] = current_time
-                                    if hasattr(self, 'stats'):
-                                        self.stats.add_signal(signal, 'vip_pump')
                             else:
-                                # VIP отправка с графиком (первый раз)
-                                try:
-                                    # ✅ Сначала фильтруем причины
-                                    signal['reasons'] = vip_reasons
-                                    filtered_msg, _ = self.format_pump_message(signal, contract_info)
-                                    
-                                    # ✅ Загружаем данные для графика
-                                    df_local = None
-                                    for fetcher in self.fetchers.values():
-                                        if fetcher.name == signal['exchange']:
-                                            df_local = await fetcher.fetch_ohlcv(signal['symbol'], TIMEFRAMES.get('current', '15m'), limit=200)
-                                            break
-                                    
-                                    if df_local is not None and not df_local.empty:
-                                        df_local = self.analyzer.calculate_indicators(df_local)
-                                        chart_buf = self.chart_generator.create_chart(df_local, signal, coin, TIMEFRAMES.get('current', '15m'))
-                                        
-                                        await self.telegram_bot.send_photo(
-                                            chat_id=VIP_PUMP_CHAT_ID,
-                                            photo=chart_buf,
-                                            caption=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
-                                            parse_mode='HTML',
-                                            reply_markup=pump_data['keyboard']
-                                        )
-                                        logger.info(f"✅ Отправлен VIP сигнал с графиком: {signal['symbol']}")
-                                    else:
-                                        await self.telegram_bot.send_message(
-                                            chat_id=VIP_PUMP_CHAT_ID,
-                                            text=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
-                                            parse_mode='HTML',
-                                            reply_markup=pump_data['keyboard']
-                                        )
-                                        logger.info(f"✅ Отправлен VIP сигнал (без графика): {signal['symbol']}")
-                                except Exception as e:
-                                    logger.error(f"❌ Ошибка отправки VIP сигнала: {e}")
-                                
+                                await self._send_vip_signal(signal, coin, pump_data, contract_info, df)
                                 self.last_vip_signal_time[coin] = current_time
-                                if hasattr(self, 'stats'):
-                                    self.stats.add_signal(signal, 'vip_pump')
+
+    async def _send_vip_signal(self, signal, coin, pump_data, contract_info, df):
+        """Отправка VIP сигнала"""
+        try:
+            filtered_msg, _ = self.format_pump_message(signal, contract_info)
+            
+            logger.info(f"  🔍 signal['entry_zones'] перед форматированием: {signal.get('entry_zones', [])}")
+            
+            if df is not None and not df.empty:
+                df = self.analyzer.calculate_indicators(df)
+                chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
+                
+                await self.telegram_bot.send_photo(
+                    chat_id=VIP_PUMP_CHAT_ID,
+                    photo=chart_buf,
+                    caption=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
+                    parse_mode='HTML',
+                    reply_markup=pump_data['keyboard']
+                )
+                logger.info(f"✅ Отправлен VIP сигнал с графиком: {signal['symbol']}")
+            else:
+                await self.telegram_bot.send_message(
+                    chat_id=VIP_PUMP_CHAT_ID,
+                    text=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
+                    parse_mode='HTML',
+                    reply_markup=pump_data['keyboard']
+                )
+                logger.info(f"✅ Отправлен VIP сигнал (без графика): {signal['symbol']}")
+            
+            if hasattr(self, 'stats'):
+                self.stats.add_signal(signal, 'vip_pump')
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки VIP сигнала: {e}")
+
     async def _send_accumulation_message(self, signal: Dict, coin: str):
         """Отправка сообщения о накоплении"""
         contract_info = None
