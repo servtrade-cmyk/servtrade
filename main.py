@@ -9601,8 +9601,8 @@ class MultiExchangeScannerBot:
 
                     # Базовые условия
                     basic_ok = (
-                        pump_change >= VIP_PUMP_SETTINGS.get('min_pump_change', 10.0) and
-                        confidence >= VIP_PUMP_SETTINGS.get('min_confidence', 80) and
+                        pump_change >= VIP_PUMP_SETTINGS.get('min_pump_change', 10.0) or
+                        confidence >= VIP_PUMP_SETTINGS.get('min_confidence', 80) or
                         volume_ratio >= VIP_PUMP_SETTINGS.get('min_volume_ratio', 3.0)
                     )
 
