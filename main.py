@@ -9901,12 +9901,12 @@ class MultiExchangeScannerBot:
                         
                         is_vip = indicators_ok
                         logger.info(f"  🔍 VIP результат: {'✅ ДА' if is_vip else '❌ НЕТ'}")
-
+                        
                         # ✅ ДОБАВИТЬ СЮДА
                         logger.info(f"  🔍 ВОШЛИ В VIP БЛОК для {coin}, is_vip={is_vip}")
                         logger.info(f"  🔍 is_vip = {is_vip}")
                         logger.info(f"  🔍 Проверка кд для {coin}: {coin in self.last_vip_signal_time if hasattr(self, 'last_vip_signal_time') else 'False (нет словаря)'}")
-                        
+
                         if is_vip:
                             # Проверка кд для VIP
                             if not hasattr(self, 'last_vip_signal_time'):
@@ -9979,11 +9979,11 @@ class MultiExchangeScannerBot:
                                         
                                         # Заменяем причины в сигнале на отфильтрованные
                                         signal['reasons'] = vip_reasons
-
+                                        
                                         # ✅ ЛОГИРОВАНИЕ (ПОСЛЕ ЗАМЕНЫ)
                                         logger.info(f"  🔍 VIP причины ПОСЛЕ фильтра (vip_reasons): {vip_reasons[:5]}")
                                         logger.info(f"  🔍 signal['reasons'] после замены: {signal['reasons'][:5]}")
-                                        
+
                                         # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
                                         filtered_msg, _ = self.format_pump_message(signal, contract_info)
                                         
@@ -10017,6 +10017,10 @@ class MultiExchangeScannerBot:
                             else:
                                 # VIP отправка с графиком (первый раз)
                                 try:
+                                    # ✅ Сначала фильтруем причины
+                                    signal['reasons'] = vip_reasons
+                                    filtered_msg, _ = self.format_pump_message(signal, contract_info)
+                                    
                                     if df is not None and not df.empty:
                                         df = self.analyzer.calculate_indicators(df)
                                         chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
@@ -10024,7 +10028,7 @@ class MultiExchangeScannerBot:
                                         await self.telegram_bot.send_photo(
                                             chat_id=VIP_PUMP_CHAT_ID,
                                             photo=chart_buf,
-                                            caption=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                            caption=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
                                             parse_mode='HTML',
                                             reply_markup=pump_data['keyboard']
                                         )
@@ -10032,7 +10036,7 @@ class MultiExchangeScannerBot:
                                     else:
                                         await self.telegram_bot.send_message(
                                             chat_id=VIP_PUMP_CHAT_ID,
-                                            text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                            text=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
                                             parse_mode='HTML',
                                             reply_markup=pump_data['keyboard']
                                         )
