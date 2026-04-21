@@ -9975,7 +9975,10 @@ class MultiExchangeScannerBot:
                                         # Заменяем причины в сигнале на отфильтрованные
                                         signal['reasons'] = vip_reasons
                                         
-                                        # Формируем сообщение с отфильтрованными причинами
+                                        # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
+                                        filtered_msg, _ = self.format_pump_message(signal, contract_info)
+                                        
+                                        # Отправляем VIP сигнал с НОВЫМ сообщением
                                         if df is not None and not df.empty:
                                             df = self.analyzer.calculate_indicators(df)
                                             chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
@@ -9983,7 +9986,7 @@ class MultiExchangeScannerBot:
                                             await self.telegram_bot.send_photo(
                                                 chat_id=VIP_PUMP_CHAT_ID,
                                                 photo=chart_buf,
-                                                caption=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                                caption=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
                                                 parse_mode='HTML',
                                                 reply_markup=pump_data['keyboard']
                                             )
@@ -9991,7 +9994,7 @@ class MultiExchangeScannerBot:
                                         else:
                                             await self.telegram_bot.send_message(
                                                 chat_id=VIP_PUMP_CHAT_ID,
-                                                text=f"👑 VIP СИГНАЛ 👑\n\n{pump_data['message']}",
+                                                text=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
                                                 parse_mode='HTML',
                                                 reply_markup=pump_data['keyboard']
                                             )
