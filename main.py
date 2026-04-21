@@ -9992,6 +9992,8 @@ class MultiExchangeScannerBot:
                                                 vip_reasons.append(reason)
                                         
                                         # Заменяем причины в сигнале на отфильтрованные
+                                        # ✅ Просто берём первые 10 причин без сложной фильтрации
+                                        vip_reasons = signal.get('reasons', [])[:10]
                                         signal['reasons'] = vip_reasons
                                         
                                         # Проверка кд для VIP
@@ -10039,11 +10041,10 @@ class MultiExchangeScannerBot:
                             else:
                                 # VIP отправка с графиком (первый раз)
                                 try:
-                                    # ✅ ДОБАВИТЬ ЭТУ СТРОКУ
-                                    vip_reasons = signal.get('reasons', []).copy()
-                                    
-                                    # ✅ Сначала фильтруем причины
+                                    # ✅ Просто берём первые 10 причин
+                                    vip_reasons = signal.get('reasons', [])[:10]
                                     signal['reasons'] = vip_reasons
+                                    
                                     # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
                                     pump_percent = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
                                     filtered_msg, _ = self.format_message(signal, contract_info, pump_percent)
