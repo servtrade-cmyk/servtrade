@@ -9572,6 +9572,8 @@ class MultiExchangeScannerBot:
 
         coin = self.extract_coin(signal['symbol'])
         current_time = datetime.now()
+
+        from config import RISK_MANAGEMENT_SETTINGS
         
         # ✅ Если dataframes не переданы — создаём пустой словарь
         if dataframes is None:
