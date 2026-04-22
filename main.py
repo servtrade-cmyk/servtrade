@@ -5317,16 +5317,16 @@ class MultiTimeframeAnalyzer:
         else:
             result['confidence_modifier'] = settings.get('penalty_very_low', -15)
         
-        # Добавляем причину о согласованности (только одну строку)
-        if settings.get('show_percentage', True):
-            if result['percentage'] >= 100:
-                result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — идеально")
-            elif result['percentage'] >= 66:
-                result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — хорошо")
-            elif result['percentage'] >= 33:
-                result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — средняя")
-            else:
-                result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — низкая")
+        # # Добавляем причину о согласованности (только одну строку)
+        # if settings.get('show_percentage', True):
+        #     if result['percentage'] >= 100:
+        #         result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — идеально")
+        #     elif result['percentage'] >= 66:
+        #         result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — хорошо")
+        #     elif result['percentage'] >= 33:
+        #         result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — средняя")
+        #     else:
+        #         result['reasons'].append(f"📊 Согласованность ТФ: {result['percentage']}% ({aligned_count}/{available_tfs}) — низкая")
         
         # Определяем статус на основе режима
         threshold = settings.get('thresholds', {}).get(mode, 0)
@@ -8613,7 +8613,20 @@ class FastPumpScanner:
             t1 = format_target(signal['target_1'])
             t2 = format_target(signal['target_2'])
             sl = format_target(signal['stop_loss'])
-            line9 = f"🎯 Цели: <code>{t1}</code> | <code>{t2}</code> | SL <code>{sl}</code>"
+
+            # Форматируем цели с процентами
+            risk_pct = signal.get('risk_percent', 0)
+            reward_pct = signal.get('reward_percent', 0)
+
+            if 'LONG' in signal['direction']:
+                line9 = f"🎯 Цели: <code>{t1}</code> (+{reward_pct*0.5:.1f}%) | <code>{t2}</code> (+{reward_pct:.1f}%) | SL <code>{sl}</code> (-{risk_pct:.1f}%)"
+            else:
+                line9 = f"🎯 Цели: <code>{t1}</code> (-{reward_pct*0.5:.1f}%) | <code>{t2}</code> (-{reward_pct:.1f}%) | SL <code>{sl}</code> (+{risk_pct:.1f}%)"
+
+            # Добавляем Risk/Reward
+            rr_ratio = signal.get('rr_ratio', 0)
+            if rr_ratio > 0:
+                line9 += f"\n📊 Риск/Прибыль: 1:{rr_ratio:.0f}"
         else:
             line9 = "🎯 Цели: N/A | N/A | SL N/A"
         
@@ -9081,6 +9094,9 @@ class MultiExchangeScannerBot:
             coin = self.extract_coin(signal['symbol'])
             pump_text = ""
         
+        if signal.get('signal_type') == 'vip_pump':
+        main_emoji = '👑' + main_emoji
+    
         # Определяем направление для отображения (с учетом предупреждений)
         display_direction = signal['direction']
         
@@ -9175,23 +9191,23 @@ class MultiExchangeScannerBot:
         
         lines.append(f"💰 Цена текущая: {price_formatted}")
 
-        # ✅ ДОБАВИТЬ БЛОК РИСК-МЕНЕДЖМЕНТА ЗДЕСЬ
-        if signal.get('risk_percent') and signal.get('rr_ratio'):
-            risk_percent = signal.get('risk_percent', 0)
-            reward_percent = signal.get('reward_percent', 0)
-            rr_ratio = signal.get('rr_ratio', 0)
+        # # ✅ ДОБАВИТЬ БЛОК РИСК-МЕНЕДЖМЕНТА ЗДЕСЬ
+        # if signal.get('risk_percent') and signal.get('rr_ratio'):
+        #     risk_percent = signal.get('risk_percent', 0)
+        #     reward_percent = signal.get('reward_percent', 0)
+        #     rr_ratio = signal.get('rr_ratio', 0)
             
-            lines.append("")
-            lines.append(f"📊 РИСК-МЕНЕДЖМЕНТ:")
+        #     lines.append("")
+        #     lines.append(f"📊 РИСК-МЕНЕДЖМЕНТ:")
             
-            if 'LONG' in signal['direction']:
-                lines.append(f"└ Стоп-лосс: -{risk_percent:.1f}%")
-                lines.append(f"└ Цель 1: +{reward_percent * 0.5:.1f}% | Цель 2: +{reward_percent:.1f}%")
-            else:
-                lines.append(f"└ Стоп-лосс: +{risk_percent:.1f}%")
-                lines.append(f"└ Цель 1: -{reward_percent * 0.5:.1f}% | Цель 2: -{reward_percent:.1f}%")
+        #     if 'LONG' in signal['direction']:
+        #         lines.append(f"└ Стоп-лосс: -{risk_percent:.1f}%")
+        #         lines.append(f"└ Цель 1: +{reward_percent * 0.5:.1f}% | Цель 2: +{reward_percent:.1f}%")
+        #     else:
+        #         lines.append(f"└ Стоп-лосс: +{risk_percent:.1f}%")
+        #         lines.append(f"└ Цель 1: -{reward_percent * 0.5:.1f}% | Цель 2: -{reward_percent:.1f}%")
             
-            lines.append(f"└ Risk/Reward: 1:{rr_ratio:.0f}")
+        #     lines.append(f"└ Risk/Reward: 1:{rr_ratio:.0f}")
         
         # Зоны доп.входа
         entry_zones = signal.get('entry_zones', [])
@@ -9590,9 +9606,9 @@ class MultiExchangeScannerBot:
 
         coin = self.extract_coin(signal['symbol'])
         current_time = datetime.now()
-
-        from config import RISK_MANAGEMENT_SETTINGS
         
+        from config import RISK_MANAGEMENT_SETTINGS
+
         # ✅ Если dataframes не переданы — создаём пустой словарь
         if dataframes is None:
             dataframes = {}
