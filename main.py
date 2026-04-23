@@ -8561,24 +8561,34 @@ class FastPumpScanner:
         if line8:
             lines.append(line8)
             lines.append("")
+        
+        # Форматирование цены
+        if signal['price'] < 0.00001:
+            price_formatted = f"{signal['price']:.8f}"
+        elif signal['price'] < 0.0001:
+            price_formatted = f"{signal['price']:.7f}"
+        elif signal['price'] < 0.001:
+            price_formatted = f"{signal['price']:.6f}"
+        elif signal['price'] < 0.01:
+            price_formatted = f"{signal['price']:.5f}"
+        elif signal['price'] < 0.1:
+            price_formatted = f"{signal['price']:.4f}"
+        elif signal['price'] < 1:
+            price_formatted = f"{signal['price']:.3f}"
+        else:
+            price_formatted = f"{signal['price']:.2f}"
+        price_formatted = price_formatted.rstrip('0').rstrip('.') if '.' in price_formatted else price_formatted
 
         # Цели и стоп
         if signal.get('target_1') and signal.get('target_2') and signal.get('stop_loss'):
-            def format_target(price):
-                if price < 0.00001:
-                    return f"{price:.8f}".rstrip('0').rstrip('.')
-                elif price < 0.0001:
-                    return f"{price:.7f}".rstrip('0').rstrip('.')
-                elif price < 0.001:
-                    return f"{price:.6f}".rstrip('0').rstrip('.')
-                elif price < 0.01:
-                    return f"{price:.5f}".rstrip('0').rstrip('.')
-                elif price < 0.1:
-                    return f"{price:.4f}".rstrip('0').rstrip('.')
-                elif price < 1:
-                    return f"{price:.3f}".rstrip('0').rstrip('.')
-                else:
-                    return f"{price:.2f}"
+            def format_target(p):
+                if p < 0.00001: return f"{p:.8f}".rstrip('0').rstrip('.')
+                elif p < 0.0001: return f"{p:.7f}".rstrip('0').rstrip('.')
+                elif p < 0.001: return f"{p:.6f}".rstrip('0').rstrip('.')
+                elif p < 0.01: return f"{p:.5f}".rstrip('0').rstrip('.')
+                elif p < 0.1: return f"{p:.4f}".rstrip('0').rstrip('.')
+                elif p < 1: return f"{p:.3f}".rstrip('0').rstrip('.')
+                else: return f"{p:.2f}"
             
             t1 = format_target(signal['target_1'])
             t2 = format_target(signal['target_2'])
@@ -8588,25 +8598,30 @@ class FastPumpScanner:
             reward_pct = signal.get('reward_percent', 0)
             rr_ratio = signal.get('rr_ratio', 0)
             
-            # Fallback
+            # Fallback если проценты не переданы
             if risk_pct == 0 or reward_pct == 0:
-                current_price = signal['price']
-                if signal.get('target_1') and signal.get('stop_loss'):
-                    if 'LONG' in signal['direction']:
-                        risk_pct = (current_price - signal['stop_loss']) / current_price * 100
-                        reward_pct = (signal['target_2'] - current_price) / current_price * 100
-                    else:
-                        risk_pct = (signal['stop_loss'] - current_price) / current_price * 100
-                        reward_pct = (current_price - signal['target_2']) / current_price * 100
+                cp = signal['price']
+                if 'LONG' in signal['direction']:
+                    risk_pct = (cp - signal['stop_loss']) / cp * 100
+                    reward_pct = (signal['target_2'] - cp) / cp * 100
+                else:
+                    risk_pct = (signal['stop_loss'] - cp) / cp * 100
+                    reward_pct = (cp - signal['target_2']) / cp * 100
             
             # Цена + SL
-            lines.append(f"💰 Цена текущая: {price_formatted} | SL {sl} ({risk_pct:.1f}%)")
+            if risk_pct > 0:
+                lines.append(f"💰 Цена текущая: {price_formatted} | SL {sl} ({risk_pct:.1f}%)")
+            else:
+                lines.append(f"💰 Цена текущая: {price_formatted} | SL {sl}")
             
             # Цели
-            if 'LONG' in signal['direction']:
-                lines.append(f"🎯 Цели: {t1} (+{reward_pct*0.5:.1f}%) | {t2} (+{reward_pct:.1f}%)")
+            if reward_pct > 0:
+                if 'LONG' in signal['direction']:
+                    lines.append(f"🎯 Цели: {t1} (+{reward_pct*0.5:.1f}%) | {t2} (+{reward_pct:.1f}%)")
+                else:
+                    lines.append(f"🎯 Цели: {t1} (-{reward_pct*0.5:.1f}%) | {t2} (-{reward_pct:.1f}%)")
             else:
-                lines.append(f"🎯 Цели: {t1} (-{reward_pct*0.5:.1f}%) | {t2} (-{reward_pct:.1f}%)")
+                lines.append(f"🎯 Цели: {t1} | {t2}")
         else:
             lines.append(f"💰 Цена текущая: {price_formatted}")
 
