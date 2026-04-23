@@ -7293,7 +7293,10 @@ class MultiTimeframeAnalyzer:
                 targets = {
                     'target_1': target_1,
                     'target_2': target_2,
-                    'stop_loss': stop_loss,
+                    'stop_loss': stop_loss,                    
+                    'risk_percent': stop_percent * 100,
+                    'reward_percent': stop_percent * rr_ratio * 100,
+                    'rr_ratio': rr_ratio,
                 }
             
             elif mode == 'atr':
@@ -8617,18 +8620,29 @@ class FastPumpScanner:
             # Форматируем цели с процентами
             risk_pct = signal.get('risk_percent', 0)
             reward_pct = signal.get('reward_percent', 0)
-
-            if 'LONG' in signal['direction']:
-                line9 = f"🎯 Цели: <code>{t1}</code> (+{reward_pct*0.5:.1f}%) | <code>{t2}</code> (+{reward_pct:.1f}%) | SL <code>{sl}</code> (-{risk_pct:.1f}%)"
-            else:
-                line9 = f"🎯 Цели: <code>{t1}</code> (-{reward_pct*0.5:.1f}%) | <code>{t2}</code> (-{reward_pct:.1f}%) | SL <code>{sl}</code> (+{risk_pct:.1f}%)"
-
-            # Добавляем Risk/Reward
             rr_ratio = signal.get('rr_ratio', 0)
-            if rr_ratio > 0:
-                line9 += f"\n📊 Риск/Прибыль: 1:{rr_ratio:.0f}"
-        else:
-            line9 = "🎯 Цели: N/A | N/A | SL N/A"
+
+            # ✅ Проверка на 0 (fallback)
+            if risk_pct == 0 or reward_pct == 0:
+                current_price = signal['price']
+                if signal.get('target_1') and signal.get('stop_loss'):
+                    if 'LONG' in signal['direction']:
+                        risk_pct = (current_price - signal['stop_loss']) / current_price * 100
+                        reward_pct = (signal['target_2'] - current_price) / current_price * 100
+                    else:
+                        risk_pct = (signal['stop_loss'] - current_price) / current_price * 100
+                        reward_pct = (current_price - signal['target_2']) / current_price * 100
+
+            if risk_pct > 0:
+                if 'LONG' in signal['direction']:
+                    line9 = f"🎯 Цели: <code>{t1}</code> (+{reward_pct*0.5:.1f}%) | <code>{t2}</code> (+{reward_pct:.1f}%) | SL <code>{sl}</code> (-{risk_pct:.1f}%)"
+                else:
+                    line9 = f"🎯 Цели: <code>{t1}</code> (-{reward_pct*0.5:.1f}%) | <code>{t2}</code> (-{reward_pct:.1f}%) | SL <code>{sl}</code> (+{risk_pct:.1f}%)"
+                
+                if rr_ratio > 0:
+                    line9 += f"\n📊 Риск/Прибыль: 1:{rr_ratio:.0f}"
+            else:
+                line9 = f"🎯 Цели: <code>{t1}</code> | <code>{t2}</code> | SL <code>{sl}</code>"
         
         line10 = ""
         line11 = "💡 Причины:"
