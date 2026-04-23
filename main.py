@@ -8602,30 +8602,26 @@ class FastPumpScanner:
             if risk_pct == 0 or reward_pct == 0:
                 cp = signal['price']
                 if 'LONG' in signal['direction']:
-                    risk_pct = (cp - signal['stop_loss']) / cp * 100
+                    risk_pct = abs((cp - signal['stop_loss']) / cp * 100)
                     reward_pct = (signal['target_2'] - cp) / cp * 100
                 else:
-                    risk_pct = (signal['stop_loss'] - cp) / cp * 100
-                    reward_pct = (cp - signal['target_2']) / cp * 100
+                    risk_pct = abs((signal['stop_loss'] - cp) / cp * 100)
+                    reward_pct = abs((cp - signal['target_2']) / cp * 100)
+                if rr_ratio == 0:
+                    rr_ratio = reward_pct / risk_pct if risk_pct > 0 else 0
             
-            # Цена + SL
+            # Цена + SL + Цели (как в старом формате)
             if risk_pct > 0:
-                lines.append(f"💰 Цена текущая: {price_formatted} | SL {sl} ({risk_pct:.1f}%)")
-            else:
-                lines.append(f"💰 Цена текущая: {price_formatted} | SL {sl}")
-            
-            # Цели
-            if reward_pct > 0:
                 if 'LONG' in signal['direction']:
-                    lines.append(f"🎯 Цели: {t1} (+{reward_pct*0.5:.1f}%) | {t2} (+{reward_pct:.1f}%)")
+                    line9 = f"💰 Цена текущая: {price_formatted}\n🎯 Цели: {t1} (+{reward_pct*0.5:.1f}%) | {t2} (+{reward_pct:.1f}%) | SL {sl} (-{risk_pct:.1f}%)"
                 else:
-                    lines.append(f"🎯 Цели: {t1} (-{reward_pct*0.5:.1f}%) | {t2} (-{reward_pct:.1f}%)")
+                    line9 = f"💰 Цена текущая: {price_formatted}\n🎯 Цели: {t1} (-{reward_pct*0.5:.1f}%) | {t2} (-{reward_pct:.1f}%) | SL {sl} (+{risk_pct:.1f}%)"
             else:
-                lines.append(f"🎯 Цели: {t1} | {t2}")
+                line9 = f"💰 Цена текущая: {price_formatted}\n🎯 Цели: {t1} | {t2} | SL {sl}"
         else:
-            lines.append(f"💰 Цена текущая: {price_formatted}")
+            line9 = f"💰 Цена текущая: {price_formatted}"
 
-        # Зоны добора (компактный формат с группировкой)
+        # Зоны добора
         entry_zones = signal.get('entry_zones', [])
         if entry_zones:
             tf_priority = {
@@ -8680,13 +8676,14 @@ class FastPumpScanner:
                     else: return f"{p:.2f}"
                 
                 formatted = [f"{fmt_price(z['price'])} ({z['tf']})" for z in sorted_zones]
-                lines.append(f"🟣 Зоны добора: {' | '.join(formatted)}")
+                line9 += f"\n🟣 Зоны добора: {' | '.join(formatted)}"
 
         # Risk/Reward
-        if signal.get('rr_ratio', 0) > 0:
-            lines.append(f"📊 Риск/Прибыль: 1:{signal['rr_ratio']:.0f}")
+        if signal.get('rr_ratio', 0) > 0 or (risk_pct > 0 and reward_pct > 0):
+            rr = signal.get('rr_ratio', 0) or reward_pct / risk_pct if risk_pct > 0 else 0
+            if rr > 0:
+                line9 += f"\n📊 Риск/Прибыль: 1:{rr:.0f}"
 
-        line9 = ""
         line10 = ""
         line11 = "💡 Причины:"
         
