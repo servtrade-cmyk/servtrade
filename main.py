@@ -8555,48 +8555,15 @@ class FastPumpScanner:
                 line8 = f"📉 Падение: <code>{start_formatted}</code> → <code>{price_formatted}</code> за {pump_time:.0f}с"
         
         # Собираем строки сообщения
-        lines = [line1, line2, line3, line4, line5, line6, line7]
+        lines = [line1, line2, line3, line4, line5, line6]
         
+        # Рост/падение
         if line8:
             lines.append(line8)
+            lines.append("")
 
-        # Зоны доп.входа (добавить сюда)
-        entry_zones = signal.get('entry_zones', [])
-        logger.info(f"  🔍 Зоны доп.входа в памп-сигнале: {entry_zones}")
-        if entry_zones:
-            lines.append("🟣 Зоны доп.входа:")
-            for zone in entry_zones:
-                lines.append(f"     ▪️ <code>{zone}</code>")
-            logger.info(f"  🔍 lines после добавления зон: {lines[-3:]}")  # последние 3 строки
-
-        # Форматирование целей
+        # Цели и стоп
         if signal.get('target_1') and signal.get('target_2') and signal.get('stop_loss'):
-            # ✅ ЗАЩИТА ОТ НЕПРАВИЛЬНЫХ ЦЕЛЕЙ
-            current_price = signal['price']
-            direction = signal['direction']
-            
-            # Для SHORT цели должны быть ниже цены, стоп - выше
-            if 'SHORT' in direction:
-                if signal['target_1'] > current_price or signal['target_2'] > current_price:
-                    logger.warning(f"  ⚠️ Неправильные цели для SHORT: цели выше цены. Меняем местами со стопом")
-                    # Меняем местами цели и стоп
-                    temp_t1 = signal['target_1']
-                    temp_t2 = signal['target_2']
-                    temp_sl = signal['stop_loss']
-                    signal['target_1'] = temp_sl
-                    signal['target_2'] = temp_sl - (temp_t1 - temp_sl)  # примерная вторая цель
-                    signal['stop_loss'] = temp_t1
-            
-            # Для LONG цели должны быть выше цены, стоп - ниже
-            if 'LONG' in direction:
-                if signal['target_1'] < current_price or signal['target_2'] < current_price:
-                    logger.warning(f"  ⚠️ Неправильные цели для LONG: цели ниже цены. Меняем местами со стопом")
-                    temp_t1 = signal['target_1']
-                    temp_t2 = signal['target_2']
-                    temp_sl = signal['stop_loss']
-                    signal['target_1'] = temp_sl
-                    signal['target_2'] = temp_sl + (temp_sl - temp_t1)
-                    signal['stop_loss'] = temp_t1
             def format_target(price):
                 if price < 0.00001:
                     return f"{price:.8f}".rstrip('0').rstrip('.')
@@ -8616,13 +8583,12 @@ class FastPumpScanner:
             t1 = format_target(signal['target_1'])
             t2 = format_target(signal['target_2'])
             sl = format_target(signal['stop_loss'])
-
-            # Форматируем цели с процентами
+            
             risk_pct = signal.get('risk_percent', 0)
             reward_pct = signal.get('reward_percent', 0)
             rr_ratio = signal.get('rr_ratio', 0)
-
-            # ✅ Проверка на 0 (fallback)
+            
+            # Fallback
             if risk_pct == 0 or reward_pct == 0:
                 current_price = signal['price']
                 if signal.get('target_1') and signal.get('stop_loss'):
@@ -8632,18 +8598,79 @@ class FastPumpScanner:
                     else:
                         risk_pct = (signal['stop_loss'] - current_price) / current_price * 100
                         reward_pct = (current_price - signal['target_2']) / current_price * 100
-
-            if risk_pct > 0:
-                if 'LONG' in signal['direction']:
-                    line9 = f"🎯 Цели: <code>{t1}</code> (+{reward_pct*0.5:.1f}%) | <code>{t2}</code> (+{reward_pct:.1f}%) | SL <code>{sl}</code> (-{risk_pct:.1f}%)"
-                else:
-                    line9 = f"🎯 Цели: <code>{t1}</code> (-{reward_pct*0.5:.1f}%) | <code>{t2}</code> (-{reward_pct:.1f}%) | SL <code>{sl}</code> (+{risk_pct:.1f}%)"
-                
-                if rr_ratio > 0:
-                    line9 += f"\n📊 Риск/Прибыль: 1:{rr_ratio:.0f}"
+            
+            # Цена + SL
+            lines.append(f"💰 Цена текущая: {price_formatted} | SL {sl} ({risk_pct:.1f}%)")
+            
+            # Цели
+            if 'LONG' in signal['direction']:
+                lines.append(f"🎯 Цели: {t1} (+{reward_pct*0.5:.1f}%) | {t2} (+{reward_pct:.1f}%)")
             else:
-                line9 = f"🎯 Цели: <code>{t1}</code> | <code>{t2}</code> | SL <code>{sl}</code>"
-        
+                lines.append(f"🎯 Цели: {t1} (-{reward_pct*0.5:.1f}%) | {t2} (-{reward_pct:.1f}%)")
+        else:
+            lines.append(f"💰 Цена текущая: {price_formatted}")
+
+        # Зоны добора (компактный формат с группировкой)
+        entry_zones = signal.get('entry_zones', [])
+        if entry_zones:
+            tf_priority = {
+                '15м': 1, '5м': 0, '3м': 0, '1м': 0,
+                '30м': 2, '1ч': 3, '4ч': 4, '1д': 5, '1н': 6, '1М': 7
+            }
+            
+            grouped_zones = {}
+            for zone_str in entry_zones:
+                zone_clean = zone_str
+                for old, new in [('current', '15м'), ('four_hourly', '4ч'), ('hourly', '1ч'), 
+                                 ('daily', '1д'), ('weekly', '1н'), ('monthly', '1М')]:
+                    zone_clean = zone_clean.replace(old, new)
+                
+                parts = zone_clean.split(' (')
+                if len(parts) == 2:
+                    try:
+                        zone_price = float(parts[0].strip())
+                    except ValueError:
+                        continue
+                    zone_tf = parts[1].replace(')', '').replace('максимум ', '').replace('минимум ', '')
+                    
+                    rounded_price = round(zone_price / (signal['price'] * 0.005)) * (signal['price'] * 0.005)
+                    
+                    if rounded_price not in grouped_zones:
+                        grouped_zones[rounded_price] = {'price': zone_price, 'tf': zone_tf, 
+                                                        'tf_priority': tf_priority.get(zone_tf, 0)}
+                    else:
+                        new_priority = tf_priority.get(zone_tf, 0)
+                        if new_priority > grouped_zones[rounded_price]['tf_priority']:
+                            grouped_zones[rounded_price] = {'price': zone_price, 'tf': zone_tf,
+                                                            'tf_priority': new_priority}
+            
+            is_long = 'LONG' in signal.get('direction', '')
+            current_price = signal['price']
+            
+            if is_long:
+                sorted_zones = sorted([z for z in grouped_zones.values() if z['price'] < current_price],
+                                      key=lambda x: x['price'], reverse=True)[:3]
+            else:
+                sorted_zones = sorted([z for z in grouped_zones.values() if z['price'] > current_price],
+                                      key=lambda x: x['price'])[:3]
+            
+            if sorted_zones:
+                def fmt_price(p):
+                    if p < 0.00001: return f"{p:.8f}".rstrip('0').rstrip('.')
+                    elif p < 0.0001: return f"{p:.7f}".rstrip('0').rstrip('.')
+                    elif p < 0.001: return f"{p:.6f}".rstrip('0').rstrip('.')
+                    elif p < 0.01: return f"{p:.5f}".rstrip('0').rstrip('.')
+                    elif p < 0.1: return f"{p:.4f}".rstrip('0').rstrip('.')
+                    elif p < 1: return f"{p:.3f}".rstrip('0').rstrip('.')
+                    else: return f"{p:.2f}"
+                
+                formatted = [f"{fmt_price(z['price'])} ({z['tf']})" for z in sorted_zones]
+                lines.append(f"🟣 Зоны добора: {' | '.join(formatted)}")
+
+        # Risk/Reward
+        if signal.get('rr_ratio', 0) > 0:
+            lines.append(f"📊 Риск/Прибыль: 1:{signal['rr_ratio']:.0f}")
+
         line10 = ""
         line11 = "💡 Причины:"
         
@@ -9255,18 +9282,98 @@ class MultiExchangeScannerBot:
         # Зоны добора
         entry_zones = signal.get('entry_zones', [])
         if entry_zones:
-            formatted_zones = []
-            for zone in entry_zones:
-                zone = zone.replace('current', '15м').replace('hourly', '1ч')
-                # Извлекаем только цену и ТФ из строки типа "0.0022 (минимум 15м)"
-                parts = zone.split(' (')
+            # Словарь приоритетов ТФ (чем выше значение, тем старше ТФ)
+            tf_priority = {
+                '15м': 1, '5м': 0, '3м': 0, '1м': 0,
+                '30м': 2,
+                '1ч': 3,
+                '4ч': 4,
+                '1д': 5,
+                '1н': 6,
+                '1М': 7
+            }
+            
+            # Группируем зоны по цене (близкие цены = одна зона)
+            grouped_zones = {}
+            
+            for zone_str in entry_zones:
+                # Заменяем названия ТФ
+                zone_clean = zone_str
+                zone_clean = zone_clean.replace('current', '15м')
+                zone_clean = zone_clean.replace('four_hourly', '4ч')
+                zone_clean = zone_clean.replace('hourly', '1ч')
+                zone_clean = zone_clean.replace('daily', '1д')
+                zone_clean = zone_clean.replace('weekly', '1н')
+                zone_clean = zone_clean.replace('monthly', '1М')
+                
+                # Извлекаем цену и ТФ
+                parts = zone_clean.split(' (')
                 if len(parts) == 2:
-                    zone_price = parts[0].strip()
+                    zone_price_str = parts[0].strip()
                     zone_tf = parts[1].replace(')', '').replace('максимум ', '').replace('минимум ', '')
-                    formatted_zones.append(f"{zone_price} ({zone_tf})")
-                else:
-                    formatted_zones.append(zone)
-            lines.append(f"🟣 Зоны добора: {' | '.join(formatted_zones)}")
+                    
+                    try:
+                        zone_price = float(zone_price_str)
+                    except ValueError:
+                        continue
+                    
+                    # Округляем цену для группировки (0.5% допуск)
+                    rounded_price = round(zone_price / (signal['price'] * 0.005)) * (signal['price'] * 0.005)
+                    
+                    if rounded_price not in grouped_zones:
+                        grouped_zones[rounded_price] = {
+                            'price': zone_price,
+                            'tf': zone_tf,
+                            'tf_priority': tf_priority.get(zone_tf, 0)
+                        }
+                    else:
+                        # Оставляем зону на старшем ТФ
+                        new_priority = tf_priority.get(zone_tf, 0)
+                        if new_priority > grouped_zones[rounded_price]['tf_priority']:
+                            grouped_zones[rounded_price] = {
+                                'price': zone_price,
+                                'tf': zone_tf,
+                                'tf_priority': new_priority
+                            }
+            
+            # Сортируем: для LONG — снизу вверх, для SHORT — сверху вниз
+            is_long = 'LONG' in signal.get('direction', '')
+            current_price = signal['price']
+            
+            if is_long:
+                # Для LONG: зоны поддержки (ниже цены)
+                sorted_zones = sorted(
+                    [z for z in grouped_zones.values() if z['price'] < current_price],
+                    key=lambda x: x['price'],
+                    reverse=True
+                )[:3]
+            else:
+                # Для SHORT: зоны сопротивления (выше цены)
+                sorted_zones = sorted(
+                    [z for z in grouped_zones.values() if z['price'] > current_price],
+                    key=lambda x: x['price']
+                )[:3]
+            
+            if sorted_zones:
+                # Форматируем цену
+                def fmt_price(p):
+                    if p < 0.00001:
+                        return f"{p:.8f}".rstrip('0').rstrip('.')
+                    elif p < 0.0001:
+                        return f"{p:.7f}".rstrip('0').rstrip('.')
+                    elif p < 0.001:
+                        return f"{p:.6f}".rstrip('0').rstrip('.')
+                    elif p < 0.01:
+                        return f"{p:.5f}".rstrip('0').rstrip('.')
+                    elif p < 0.1:
+                        return f"{p:.4f}".rstrip('0').rstrip('.')
+                    elif p < 1:
+                        return f"{p:.3f}".rstrip('0').rstrip('.')
+                    else:
+                        return f"{p:.2f}"
+                
+                formatted = [f"{fmt_price(z['price'])} ({z['tf']})" for z in sorted_zones]
+                lines.append(f"🟣 Зоны добора: {' | '.join(formatted)}")
 
         # Трейлинг-стоп для VIP
         if signal.get('signal_type') == 'vip_pump':
@@ -10129,7 +10236,7 @@ class MultiExchangeScannerBot:
                                             await self.telegram_bot.send_photo(
                                                 chat_id=VIP_PUMP_CHAT_ID,
                                                 photo=chart_buf,
-                                                caption=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
+                                                caption=filtered_msg,
                                                 parse_mode='HTML',
                                                 reply_markup=pump_data['keyboard']
                                             )
@@ -10137,7 +10244,7 @@ class MultiExchangeScannerBot:
                                         else:
                                             await self.telegram_bot.send_message(
                                                 chat_id=VIP_PUMP_CHAT_ID,
-                                                text=f"👑 VIP СИГНАЛ 👑\n\n{filtered_msg}",
+                                                caption=filtered_msg,
                                                 parse_mode='HTML',
                                                 reply_markup=pump_data['keyboard']
                                             )
