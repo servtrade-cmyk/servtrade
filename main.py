@@ -7352,7 +7352,12 @@ class MultiTimeframeAnalyzer:
         if signal_type == 'accumulation':
             zone_settings = ENTRY_ZONES_SETTINGS['accumulation']
         elif signal_type in ['PUMP', 'DUMP', 'pump']:
-            zone_settings = ENTRY_ZONES_SETTINGS['pump']
+            zone_settings = ENTRY_ZONES_SETTINGS['pump'].copy()
+            # Fallback если младшие ТФ недоступны
+            if '5m' not in dataframes or dataframes.get('5m') is None:
+                zone_settings['zone_2_tf'] = 'hourly'
+            if '1m' not in dataframes or dataframes.get('1m') is None:
+                zone_settings['zone_3_tf'] = 'four_hourly'
         else:
             zone_settings = ENTRY_ZONES_SETTINGS['regular']
         
@@ -7880,7 +7885,9 @@ class FastPumpScanner:
                 'volume_24h': ticker.get('volume_24h'),
                 'price_change_24h': ticker.get('percentage')
             }
-            
+
+            metadata['signal_type'] = 'pump'
+
             # Генерируем полный сигнал
             signal = self.analyzer.generate_signal(dataframes, metadata, symbol, self.fetcher.name)
             
@@ -7971,6 +7978,8 @@ class FastPumpScanner:
                                 'price_change_24h': ticker.get('percentage')
                             }
                             
+                            metadata['signal_type'] = 'pump'
+
                             signal = self.analyzer.generate_signal(dataframes, metadata, pair, self.fetcher.name)
                             
                             if signal and 'NEUTRAL' not in signal['direction']:
