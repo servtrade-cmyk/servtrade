@@ -895,74 +895,96 @@ class AccumulationAnalyzer:
 
     def detect_discovery_phase(self, df: pd.DataFrame, tf_name: str = 'daily') -> Dict:
         """
-        Обнаружение зоны дискавери (пробитие исторических уровней)
+        Обнаружение зоны дискавери (подход к ATH или пробой ATH)
         """
         result = {
             'has_discovery': False,
             'direction': None,
             'strength': 0,
-            'description': ''
+            'description': '',
+            'discovery_type': ''  # 'approach' или 'breakout'
         }
         
-        # Находим локальные экстремумы
-        highs = self._find_swing_highs(df)
-        lows = self._find_swing_lows(df)
-        
-        if len(highs) < 2 and len(lows) < 2:
+        if len(df) < 50:
             return result
         
         current_price = df['close'].iloc[-1]
+        all_time_high = df['high'].max()
+        all_time_low = df['low'].min()
         
-        # 1. Пробитие предыдущего максимума (HH)
-        if len(highs) >= 2:
-            last_high = highs[-1]['price']
-            prev_high = highs[-2]['price']
-            
-            if current_price > last_high and last_high > prev_high:
-                result['has_discovery'] = True
-                result['direction'] = 'LONG'
-                result['strength'] = 85
-                result['description'] = f"🚀 ДИСКАВЕРИ на {tf_name}: пробитие HH {last_high:.6f} → {current_price:.6f}"
-                return result
+        # Расстояние до ATH в процентах
+        distance_to_ath = (all_time_high - current_price) / current_price * 100
+        # Расстояние до ATL (для SHORT)
+        distance_to_atl = (current_price - all_time_low) / current_price * 100
         
-        # 2. Пробитие предыдущего минимума (LL) для SHORT
-        if len(lows) >= 2:
-            last_low = lows[-1]['price']
-            prev_low = lows[-2]['price']
-            
-            if current_price < last_low and last_low < prev_low:
-                result['has_discovery'] = True
-                result['direction'] = 'SHORT'
-                result['strength'] = 85
-                result['description'] = f"🚀 ДИСКАВЕРИ на {tf_name}: пробитие LL {last_low:.6f} → {current_price:.6f}"
-                return result
+        # Проверяем, цена выше последнего ATH (уже в дискавери)
+        recent_ath = df['high'].tail(20).max()
+        above_recent_ath = current_price > recent_ath
         
-        # 3. CHoCH (смена тренда) вверх
-        if len(highs) >= 2 and len(lows) >= 2:
-            last_high = highs[-1]['price']
-            prev_high = highs[-2]['price']
-            last_low = lows[-1]['price']
-            prev_low = lows[-2]['price']
+        # 1. Подход к ATH (предупреждение)
+        if 0 < distance_to_ath <= 5.0:  # Цена в 5% от ATH
+            result['has_discovery'] = True
+            result['direction'] = 'LONG'
+            result['strength'] = 70
+            result['discovery_type'] = 'approach'
+            result['description'] = f"🔔 ПОДХОД К ATH на {tf_name}: {current_price:.4f} (ATH: {all_time_high:.4f}, {distance_to_ath:.1f}% до пробоя)"
+            return result
+        
+        # 2. Пробой ATH (вход в дискавери)
+        if above_recent_ath:
+            # Проверяем закрепление (3 свечи выше ATH)
+            candles_above = 0
+            for i in range(-1, -min(5, len(df)), -1):
+                if df['close'].iloc[i] > recent_ath:
+                    candles_above += 1
+                else:
+                    break
             
-            if current_price > prev_high and last_high < prev_high:
+            if candles_above >= 2:  # Минимум 2 свечи выше ATH
                 result['has_discovery'] = True
                 result['direction'] = 'LONG'
                 result['strength'] = 90
-                result['description'] = f"🔄 CHoCH на {tf_name}: смена тренда вверх"
+                result['discovery_type'] = 'breakout'
+                breakout_pct = (current_price - recent_ath) / recent_ath * 100
+                result['description'] = f"🚀 ДИСКАВЕРИ на {tf_name}: пробой ATH {recent_ath:.4f} (+{breakout_pct:.1f}%, {candles_above} свечей выше)"
                 return result
+        
+        # 3. Для SHORT: подход к ATL
+        if 0 < distance_to_atl <= 5.0:
+            result['has_discovery'] = True
+            result['direction'] = 'SHORT'
+            result['strength'] = 70
+            result['discovery_type'] = 'approach'
+            result['description'] = f"🔔 ПОДХОД К ATL на {tf_name}: {current_price:.4f} (ATL: {all_time_low:.4f}, {distance_to_atl:.1f}% до пробоя)"
+            return result
+        
+        # 4. Пробой ATL
+        recent_atl = df['low'].tail(20).min()
+        below_recent_atl = current_price < recent_atl
+        
+        if below_recent_atl:
+            candles_below = 0
+            for i in range(-1, -min(5, len(df)), -1):
+                if df['close'].iloc[i] < recent_atl:
+                    candles_below += 1
+                else:
+                    break
             
-            elif current_price < prev_low and last_low > prev_low:
+            if candles_below >= 2:
                 result['has_discovery'] = True
                 result['direction'] = 'SHORT'
                 result['strength'] = 90
-                result['description'] = f"🔄 CHoCH на {tf_name}: смена тренда вниз"
+                result['discovery_type'] = 'breakout'
+                breakout_pct = (recent_atl - current_price) / recent_atl * 100
+                result['description'] = f"🚀 ДИСКАВЕРИ на {tf_name}: пробой ATL {recent_atl:.4f} (-{breakout_pct:.1f}%, {candles_below} свечей ниже)"
                 return result
         
         return result
 
+
     def detect_big_move_preparation(self, df: pd.DataFrame, tf_name: str = 'daily') -> Dict:
         """
-        Обнаружение подготовки к большому движению (дискавери + объемы + сжатие)
+        Обнаружение подготовки к большому движению (дискавери + сжатие + объемы)
         """
         result = {
             'has_signal': False,
@@ -971,36 +993,189 @@ class AccumulationAnalyzer:
             'direction': None
         }
         
-        # 1. Дискавери / CHoCH
+        # 1. Проверяем дискавери
         discovery = self.detect_discovery_phase(df, tf_name)
         if discovery['has_discovery']:
             result['has_signal'] = True
             result['strength'] += discovery['strength']
             result['reasons'].append(discovery['description'])
             result['direction'] = discovery['direction']
+            
+            # Добавляем детали
+            if discovery['discovery_type'] == 'approach':
+                result['reasons'].append(f"⚠️ Волатильность может резко вырасти при пробое")
+            elif discovery['discovery_type'] == 'breakout':
+                result['reasons'].append(f"🔥 Цена в неизведанной зоне — возможен сильный тренд")
         
-        # 2. Аномальный объем
-        volume_spike = self.detect_volume_spikes_in_range(df)
-        if volume_spike.get('accumulation'):
-            result['has_signal'] = True
-            result['strength'] += volume_spike.get('strength', 0)
-            result['reasons'].append(volume_spike['description'])
-        
-        # 3. Рост объемов
-        volume_growth = self.detect_volume_growth(df)
-        if volume_growth.get('volume_growth'):
-            result['has_signal'] = True
-            result['strength'] += volume_growth.get('growth_pct', 0)
-            result['reasons'].append(volume_growth['description'])
-        
-        # 4. Сжатие волатильности
+        # 2. Проверяем сжатие волатильности (подготовка)
         compression = self.detect_compression(df)
         if compression.get('compression'):
             result['has_signal'] = True
-            result['strength'] += compression.get('strength', 0)
+            result['strength'] += compression.get('strength', 50)
             result['reasons'].append(compression['description'])
         
+        # 3. Проверяем рост объемов
+        volume_growth = self.detect_volume_growth(df)
+        if volume_growth.get('volume_growth'):
+            result['has_signal'] = True
+            result['strength'] += min(30, volume_growth.get('growth_pct', 0))
+            result['reasons'].append(volume_growth['description'])
+        
         return result
+
+    def detect_discovery_reversal(self, df: pd.DataFrame, dataframes: Dict = None, tf_name: str = 'daily') -> Dict:
+        """
+        Обнаружение разворота в зоне Дискавери
+        """
+        result = {
+            'has_reversal': False,
+            'direction': None,
+            'strength': 0,
+            'signals': [],
+            'description': ''
+        }
+        
+        if len(df) < 30:
+            return result
+        
+        current_price = df['close'].iloc[-1]
+        all_time_high = df['high'].max()
+        all_time_low = df['low'].min()
+        
+        # Проверяем, что цена в зоне Дискавери (выше ATH или ниже ATL)
+        in_discovery_long = current_price > df['high'].tail(30).max()
+        in_discovery_short = current_price < df['low'].tail(30).min()
+        
+        if not in_discovery_long and not in_discovery_short:
+            return result
+        
+        signals = []
+        strength = 0
+        direction = None
+        
+        # 1. Проверка дивергенции RSI
+        if 'rsi' in df.columns and len(df) >= 20:
+            recent_highs = df['high'].tail(20)
+            recent_rsi = df['rsi'].tail(20)
+            
+            price_rising = recent_highs.iloc[-1] > recent_highs.iloc[-10]
+            rsi_falling = recent_rsi.iloc[-1] < recent_rsi.iloc[-10]
+            
+            if price_rising and rsi_falling and recent_rsi.iloc[-1] > 70:
+                signals.append("🔄 Медвежья дивергенция RSI в зоне Дискавери")
+                strength += 25
+                direction = 'SHORT'
+            elif not price_rising and not rsi_falling and recent_rsi.iloc[-1] < 30:
+                signals.append("🔄 Бычья дивергенция RSI в зоне Дискавери")
+                strength += 25
+                direction = 'LONG'
+        
+        # 2. Проверка CHoCH на младших ТФ
+        if dataframes and hasattr(self, 'smart_money_analyzer'):
+            for minor_tf in ['current', 'hourly']:
+                if minor_tf in dataframes and dataframes[minor_tf] is not None:
+                    choch = self.smart_money_analyzer.detect_choch(dataframes[minor_tf], minor_tf)
+                    if choch.get('has_choch'):
+                        signals.append(f"🔄 CHoCH на {minor_tf}: {choch['description']}")
+                        strength += 20
+                        if choch.get('direction'):
+                            direction = choch['direction']
+                        break
+        
+        # 3. Проверка объёмного климакса (пинбар)
+        if len(df) >= 3:
+            last_candle = df.iloc[-1]
+            prev_candle = df.iloc[-2]
+            
+            candle_range = last_candle['high'] - last_candle['low']
+            candle_body = abs(last_candle['close'] - last_candle['open'])
+            
+            # Длинная тень + маленькое тело = пинбар
+            if candle_range > 0:
+                upper_wick = last_candle['high'] - max(last_candle['close'], last_candle['open'])
+                lower_wick = min(last_candle['close'], last_candle['open']) - last_candle['low']
+                
+                avg_volume = df['volume'].tail(10).mean()
+                high_volume = last_candle['volume'] > avg_volume * 1.5
+                
+                # Медвежий пинбар (длинная верхняя тень)
+                if upper_wick > candle_range * 0.6 and high_volume and candle_body < candle_range * 0.3:
+                    signals.append(f"📛 Медвежий пинбар с объёмом x{last_candle['volume']/avg_volume:.1f}")
+                    strength += 20
+                    direction = 'SHORT'
+                
+                # Бычий пинбар (длинная нижняя тень)
+                if lower_wick > candle_range * 0.6 and high_volume and candle_body < candle_range * 0.3:
+                    signals.append(f"📛 Бычий пинбар с объёмом x{last_candle['volume']/avg_volume:.1f}")
+                    strength += 20
+                    direction = 'LONG'
+        
+        # 4. Проверка Reversion Bands
+        if dataframes and 'current' in dataframes:
+            try:
+                reversion = ReversionBandsAnalyzer()
+                rb_result = reversion.calculate(dataframes['current'], '15m')
+                if rb_result.get('has_signal'):
+                    signals.append(f"📊 Reversion Bands: {rb_result['signal_desc']}")
+                    strength += 15
+                    if rb_result.get('signal') == 1:
+                        direction = 'LONG'
+                    elif rb_result.get('signal') == -1:
+                        direction = 'SHORT'
+            except:
+                pass
+        
+        # 5. Психологические уровни (круглые цифры)
+        round_levels = self._find_nearby_round_levels(current_price)
+        if round_levels:
+            signals.append(f"🎯 Близко к псих. уровню: {round_levels}")
+            strength += 10
+        
+        if len(signals) >= 2 and strength >= 40:
+            result['has_reversal'] = True
+            result['direction'] = direction
+            result['strength'] = min(100, strength)
+            result['signals'] = signals
+            
+            if direction == 'SHORT':
+                result['description'] = f"🔄 РАЗВОРОТ В ДИСКАВЕРИ: возможен SHORT от {current_price:.6f}"
+            else:
+                result['description'] = f"🔄 РАЗВОРОТ В ДИСКАВЕРИ: возможен LONG от {current_price:.6f}"
+        
+        return result
+
+
+    def _find_nearby_round_levels(self, current_price: float) -> str:
+        """Поиск ближайших круглых уровней"""
+        # Определяем порядок числа
+        if current_price > 100:
+            step = 100
+        elif current_price > 10:
+            step = 10
+        elif current_price > 1:
+            step = 1
+        elif current_price > 0.1:
+            step = 0.1
+        elif current_price > 0.01:
+            step = 0.01
+        elif current_price > 0.001:
+            step = 0.001
+        else:
+            step = 0.0001
+        
+        lower = int(current_price / step) * step
+        upper = lower + step
+        
+        distance_lower = (current_price - lower) / current_price * 100
+        distance_upper = (upper - current_price) / current_price * 100
+        
+        levels = []
+        if distance_lower < 3:
+            levels.append(f"{lower:.4f}")
+        if distance_upper < 3:
+            levels.append(f"{upper:.4f}")
+        
+        return ', '.join(levels) if levels else ""
 
 # ============== АНАЛИЗАТОР ТРЕНДОВЫХ ЛИНИЙ ==============
 
@@ -9580,7 +9755,7 @@ class MultiExchangeScannerBot:
                     
                     # ===== ОПОВЕЩЕНИЕ О ЩИТКОИНАХ (ДИСКАВЕРИ/ПОДГОТОВКА) =====
                     from config import SHITCOIN_ALERT_SETTINGS
-                    
+
                     if SHITCOIN_ALERT_SETTINGS.get('enabled', True):
                         try:
                             volume_24h = ticker.get('volume_24h', 0)
@@ -9605,6 +9780,27 @@ class MultiExchangeScannerBot:
                                         else:
                                             await self.send_shitcoin_alert(pair, alert)
                                             self.last_shitcoin_alert_time[pair] = datetime.now()
+                                    
+                                    # ✅ Проверка разворота в Дискавери
+                                    reversal = self.accumulation.detect_discovery_reversal(df_daily, dataframes, '1д')
+                                    
+                                    if reversal.get('has_reversal'):
+                                        if not hasattr(self, 'last_reversal_alert_time'):
+                                            self.last_reversal_alert_time = {}
+                                        
+                                        if pair in self.last_reversal_alert_time:
+                                            time_diff = (datetime.now() - self.last_reversal_alert_time[pair]).total_seconds() / 60
+                                            if time_diff < 120:  # кд 2 часа
+                                                pass
+                                            else:
+                                                await self.send_reversal_alert(pair, reversal)
+                                                self.last_reversal_alert_time[pair] = datetime.now()
+                                        else:
+                                            await self.send_reversal_alert(pair, reversal)
+                                            self.last_reversal_alert_time[pair] = datetime.now()
+                                            
+                        except Exception as e:
+                            logger.error(f"❌ Ошибка оповещения о щиткоине {pair}: {e}")
                                             
                         except Exception as e:
                             logger.error(f"❌ Ошибка оповещения о щиткоине {pair}: {e}")
@@ -10610,19 +10806,56 @@ class MultiExchangeScannerBot:
         
         coin = symbol.split('/')[0]
         
-        msg = f"🔔 ДИСКАВЕРИ/ПОДГОТОВКА\n\n"
-        msg += f"Монета: <code>{coin}</code> (щиткоин)\n"
-        msg += f"Таймфрейм: 1д\n\n"
+        # Определяем тип сигнала
+        is_approach = any('ПОДХОД' in r for r in alert.get('reasons', []))
+        is_breakout = any('ПРОБОЙ' in r for r in alert.get('reasons', []))
         
-        for reason in alert['reasons'][:5]:
-            msg += f"{reason}\n"
+        if is_breakout:
+            emoji = "🚀"
+            title = "ДИСКАВЕРИ: ПРОБОЙ ATH"
+        elif is_approach:
+            emoji = "🔔"
+            title = "ДИСКАВЕРИ: ПОДХОД К ATH"
+        else:
+            emoji = "📊"
+            title = "ДИСКАВЕРИ: ПОДГОТОВКА"
         
-        if alert['direction'] == 'LONG':
-            msg += f"\n🎯 Направление: 📈 ВВЕРХ"
-        elif alert['direction'] == 'SHORT':
-            msg += f"\n🎯 Направление: 📉 ВНИЗ"
+        # Направление
+        direction = alert.get('direction', 'LONG')
+        if direction == 'LONG':
+            dir_emoji = '🟢'
+            dir_text = 'Long'
+        elif direction == 'SHORT':
+            dir_emoji = '🔴'
+            dir_text = 'Short'
+        else:
+            dir_emoji = '⚪'
+            dir_text = 'Neutral'
         
-        msg += f"\n\n⚠️ Потенциальное большое движение!"
+        msg = f"{emoji} {title}\n\n"
+        msg += f"{dir_emoji} <code>{coin}</code> {dir_text}\n"
+        msg += f"🕓 Таймфрейм: 1д\n"
+        
+        if direction == 'LONG':
+            msg += f"📊 Направление: LONG 📈"
+        elif direction == 'SHORT':
+            msg += f"📊 Направление: SHORT 📉"
+        
+        if is_breakout:
+            msg += f" (дискавери)\n\n"
+        elif is_approach:
+            msg += f" (ожидание пробоя)\n\n"
+        else:
+            msg += f"\n\n"
+        
+        msg += f"💡 Причины:\n"
+        for reason in alert.get('reasons', [])[:8]:
+            msg += f"     {reason}\n"
+        
+        if is_approach:
+            msg += f"\n⚠️ Рекомендация: наблюдать за пробоем ATH"
+        elif is_breakout:
+            msg += f"\n⚠️ Рекомендация: вход в зону дискавери, целей нет"
         
         try:
             await self.telegram_bot.send_message(
@@ -10630,9 +10863,49 @@ class MultiExchangeScannerBot:
                 text=msg,
                 parse_mode='HTML'
             )
-            logger.info(f"✅ Отправлено оповещение о щиткоине: {symbol}")
+            logger.info(f"✅ Отправлено оповещение о дискавери: {symbol}")
         except Exception as e:
             logger.error(f"❌ Ошибка отправки оповещения: {e}")
+
+    async def send_reversal_alert(self, symbol: str, reversal: Dict):
+        """Отправка оповещения о развороте в Дискавери"""
+        from config import SHITCOIN_ALERT_SETTINGS
+        
+        coin = symbol.split('/')[0]
+        
+        direction = reversal.get('direction', 'SHORT')
+        if direction == 'LONG':
+            dir_emoji = '🟢'
+            dir_text = 'Long'
+        else:
+            dir_emoji = '🔴'
+            dir_text = 'Short'
+        
+        msg = f"🔄 РАЗВОРОТ В ДИСКАВЕРИ\n\n"
+        msg += f"{dir_emoji} <code>{coin}</code> {dir_text}\n"
+        msg += f"💰 Цена: {reversal.get('current_price', 0):.6f}\n"
+        msg += f"🕓 Таймфрейм: 1д\n"
+        
+        if direction == 'LONG':
+            msg += f"📊 Направление: LONG 📈\n\n"
+        else:
+            msg += f"📊 Направление: SHORT 📉\n\n"
+        
+        msg += f"💡 Причины:\n"
+        for signal in reversal.get('signals', [])[:6]:
+            msg += f"     {signal}\n"
+        
+        msg += f"\n⚠️ Предполагаемый разворот в зоне Дискавери"
+        
+        try:
+            await self.telegram_bot.send_message(
+                chat_id=SHITCOIN_ALERT_SETTINGS['chat_id'],
+                text=msg,
+                parse_mode='HTML'
+            )
+            logger.info(f"✅ Отправлено оповещение о развороте: {symbol}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки оповещения о развороте: {e}")
 
 # ============== TELEGRAM HANDLER ==============
 
