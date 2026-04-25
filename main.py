@@ -7547,7 +7547,8 @@ class MultiTimeframeAnalyzer:
             'alignment': alignment,
             'bearish_score': bearish_score,  # ← ДОБАВИТЬ
             'bullish_score': bullish_score,  # ← ДОБАВИТЬ (опционально)
-            'entry_zones': formatted_zones,
+            #'entry_zones': formatted_zones,
+            'entry_zones': entry_zones,
             'tf_alignment_percentage': tf_alignment['percentage'],
             'tf_aligned_count': tf_alignment['aligned_count'],
             'tf_total_count': tf_alignment['total_count'],
