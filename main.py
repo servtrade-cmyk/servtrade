@@ -7598,96 +7598,96 @@ class MultiTimeframeAnalyzer:
         #     else:
         #         formatted_zones.append(zone_str)
 
-        # ===== РАСЧЕТ ГАРАНТИРОВАННЫХ ЗОН ДОБОРА =====
-        from config import ENTRY_ZONES_GUARANTEED
+        # # ===== РАСЧЕТ ГАРАНТИРОВАННЫХ ЗОН ДОБОРА =====
+        # from config import ENTRY_ZONES_GUARANTEED
 
-        entry_zones = []
+        # entry_zones = []
 
-        if ENTRY_ZONES_GUARANTEED.get('enabled', True):
-            # is_long = 'LONG' in direction and 'SHORT' not in direction
-            is_long = direction.startswith('LONG')
-            zone_config = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-            target_tfs = zone_config.get('timeframes', ['15m', '1h', '4h'])
-            lookback = zone_config.get('lookback', 20)
-            zone_type = zone_config.get('zone_type', 'low')
-            tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
+        # if ENTRY_ZONES_GUARANTEED.get('enabled', True):
+        #     # is_long = 'LONG' in direction and 'SHORT' not in direction
+        #     is_long = direction.startswith('LONG')
+        #     zone_config = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
+        #     target_tfs = zone_config.get('timeframes', ['15m', '1h', '4h'])
+        #     lookback = zone_config.get('lookback', 20)
+        #     zone_type = zone_config.get('zone_type', 'low')
+        #     tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
 
-            logger.info(f"  🔍 ЗОНЫ ДОБОРА: direction='{direction}', is_long={is_long}, zone_type={zone_type}")
+        #     logger.info(f"  🔍 ЗОНЫ ДОБОРА: direction='{direction}', is_long={is_long}, zone_type={zone_type}")
             
-            for tf_name in target_tfs:
-                # Маппинг ТФ
-                tf_map = {
-                    '15m': 'current', '30m': '30m',
-                    '1h': 'hourly', '4h': 'four_hourly',
-                    '1d': 'daily', '1w': 'weekly'
-                }
-                df_key = tf_map.get(tf_name, tf_name)
+        #     for tf_name in target_tfs:
+        #         # Маппинг ТФ
+        #         tf_map = {
+        #             '15m': 'current', '30m': '30m',
+        #             '1h': 'hourly', '4h': 'four_hourly',
+        #             '1d': 'daily', '1w': 'weekly'
+        #         }
+        #         df_key = tf_map.get(tf_name, tf_name)
                 
-                if df_key not in dataframes or dataframes[df_key] is None or dataframes[df_key].empty:
-                    continue
+        #         if df_key not in dataframes or dataframes[df_key] is None or dataframes[df_key].empty:
+        #             continue
                 
-                df_tf = dataframes[df_key]
-                lookback_actual = min(lookback, len(df_tf))
+        #         df_tf = dataframes[df_key]
+        #         lookback_actual = min(lookback, len(df_tf))
                 
-                # if zone_type == 'high':
-                #     zone_price = df_tf['high'].tail(lookback_actual).max()
-                # else:
-                #     zone_price = df_tf['low'].tail(lookback_actual).min()
-                if zone_type == 'high':
-                    # Для SHORT: ищем ближайший максимум ВЫШЕ цены
-                    highs = df_tf['high'].tail(lookback_actual)
-                    highs_above = highs[highs > current_price]
-                    if len(highs_above) > 0:
-                        zone_price = highs_above.min()  # Ближайшее сопротивление
-                    else:
-                        continue  # Нет хаёв выше цены — пропускаем ТФ
-                else:
-                    # Для LONG: ищем ближайший минимум НИЖЕ цены
-                    lows = df_tf['low'].tail(lookback_actual)
-                    lows_below = lows[lows < current_price]
-                    if len(lows_below) > 0:
-                        zone_price = lows_below.max()  # Ближайшая поддержка
-                    else:
-                        continue  # Нет лоёв ниже цены — пропускаем ТФ
+        #         # if zone_type == 'high':
+        #         #     zone_price = df_tf['high'].tail(lookback_actual).max()
+        #         # else:
+        #         #     zone_price = df_tf['low'].tail(lookback_actual).min()
+        #         if zone_type == 'high':
+        #             # Для SHORT: ищем ближайший максимум ВЫШЕ цены
+        #             highs = df_tf['high'].tail(lookback_actual)
+        #             highs_above = highs[highs > current_price]
+        #             if len(highs_above) > 0:
+        #                 zone_price = highs_above.min()  # Ближайшее сопротивление
+        #             else:
+        #                 continue  # Нет хаёв выше цены — пропускаем ТФ
+        #         else:
+        #             # Для LONG: ищем ближайший минимум НИЖЕ цены
+        #             lows = df_tf['low'].tail(lookback_actual)
+        #             lows_below = lows[lows < current_price]
+        #             if len(lows_below) > 0:
+        #                 zone_price = lows_below.max()  # Ближайшая поддержка
+        #             else:
+        #                 continue  # Нет лоёв ниже цены — пропускаем ТФ
 
 
-                # Форматируем цену
-                if zone_price < 0.00001:
-                    zone_str = f"{zone_price:.8f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.0001:
-                    zone_str = f"{zone_price:.7f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.001:
-                    zone_str = f"{zone_price:.6f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.01:
-                    zone_str = f"{zone_price:.5f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.1:
-                    zone_str = f"{zone_price:.4f}".rstrip('0').rstrip('.')
-                elif zone_price < 1:
-                    zone_str = f"{zone_price:.3f}".rstrip('0').rstrip('.')
-                else:
-                    zone_str = f"{zone_price:.2f}"
+        #         # Форматируем цену
+        #         if zone_price < 0.00001:
+        #             zone_str = f"{zone_price:.8f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.0001:
+        #             zone_str = f"{zone_price:.7f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.001:
+        #             zone_str = f"{zone_price:.6f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.01:
+        #             zone_str = f"{zone_price:.5f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.1:
+        #             zone_str = f"{zone_price:.4f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 1:
+        #             zone_str = f"{zone_price:.3f}".rstrip('0').rstrip('.')
+        #         else:
+        #             zone_str = f"{zone_price:.2f}"
                 
-                tf_display_name = tf_display.get(tf_name, tf_name)
-                entry_zones.append(f"{zone_str} ({tf_display_name})")
+        #         tf_display_name = tf_display.get(tf_name, tf_name)
+        #         entry_zones.append(f"{zone_str} ({tf_display_name})")
 
-        # Убираем дубликаты (близкие цены)
-        seen_prices = []
-        unique_zones = []
-        for zone in entry_zones:
-            try:
-                price = float(zone.split(' (')[0])
-                is_dup = False
-                for seen in seen_prices:
-                    if abs(price - seen) / price < 0.01:  # 1% допуск
-                        is_dup = True
-                        break
-                if not is_dup:
-                    seen_prices.append(price)
-                    unique_zones.append(zone)
-            except:
-                unique_zones.append(zone)
+        # # Убираем дубликаты (близкие цены)
+        # seen_prices = []
+        # unique_zones = []
+        # for zone in entry_zones:
+        #     try:
+        #         price = float(zone.split(' (')[0])
+        #         is_dup = False
+        #         for seen in seen_prices:
+        #             if abs(price - seen) / price < 0.01:  # 1% допуск
+        #                 is_dup = True
+        #                 break
+        #         if not is_dup:
+        #             seen_prices.append(price)
+        #             unique_zones.append(zone)
+        #     except:
+        #         unique_zones.append(zone)
 
-        entry_zones = unique_zones[:3]  # Максимум 3 зоны
+        # entry_zones = unique_zones[:3]  # Максимум 3 зоны
 
         # ===== АНАЛИЗ ПАТТЕРНОВ =====
         pattern_analysis = None
@@ -7743,7 +7743,7 @@ class MultiTimeframeAnalyzer:
             'bearish_score': bearish_score,  # ← ДОБАВИТЬ
             'bullish_score': bullish_score,  # ← ДОБАВИТЬ (опционально)
             #'entry_zones': formatted_zones,
-            'entry_zones': entry_zones,
+            #'entry_zones': entry_zones,
             'tf_alignment_percentage': tf_alignment['percentage'],
             'tf_aligned_count': tf_alignment['aligned_count'],
             'tf_total_count': tf_alignment['total_count'],
@@ -9924,6 +9924,91 @@ class MultiExchangeScannerBot:
         pump_signals.sort(key=lambda x: abs(x['signal']['pump_dump'][0]['change_percent']), reverse=True)
         return pump_signals
     
+    def calculate_entry_zones(self, signal: Dict, dataframes: Dict) -> list:
+        """Расчёт зон добора на основе финального направления"""
+        from config import ENTRY_ZONES_GUARANTEED
+        
+        if not ENTRY_ZONES_GUARANTEED.get('enabled', True):
+            return []
+        
+        direction = signal.get('direction', '')
+        current_price = signal.get('price', 0)
+        is_long = direction.startswith('LONG')
+        
+        zone_config = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
+        target_tfs = zone_config.get('timeframes', ['15m', '1h', '4h'])
+        lookback = zone_config.get('lookback', 20)
+        zone_type = zone_config.get('zone_type', 'low')
+        tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
+        
+        entry_zones = []
+        tf_map = {
+            '15m': 'current', '30m': '30m',
+            '1h': 'hourly', '4h': 'four_hourly',
+            '1d': 'daily', '1w': 'weekly'
+        }
+        
+        for tf_name in target_tfs:
+            df_key = tf_map.get(tf_name, tf_name)
+            if df_key not in dataframes or dataframes[df_key] is None or dataframes[df_key].empty:
+                continue
+            
+            df_tf = dataframes[df_key]
+            lookback_actual = min(lookback, len(df_tf))
+            
+            if zone_type == 'high':
+                highs = df_tf['high'].tail(lookback_actual)
+                highs_above = highs[highs > current_price]
+                if len(highs_above) > 0:
+                    zone_price = highs_above.min()
+                else:
+                    continue
+            else:
+                lows = df_tf['low'].tail(lookback_actual)
+                lows_below = lows[lows < current_price]
+                if len(lows_below) > 0:
+                    zone_price = lows_below.max()
+                else:
+                    continue
+            
+            # Форматирование цены
+            if zone_price < 0.00001:
+                zone_str = f"{zone_price:.8f}".rstrip('0').rstrip('.')
+            elif zone_price < 0.0001:
+                zone_str = f"{zone_price:.7f}".rstrip('0').rstrip('.')
+            elif zone_price < 0.001:
+                zone_str = f"{zone_price:.6f}".rstrip('0').rstrip('.')
+            elif zone_price < 0.01:
+                zone_str = f"{zone_price:.5f}".rstrip('0').rstrip('.')
+            elif zone_price < 0.1:
+                zone_str = f"{zone_price:.4f}".rstrip('0').rstrip('.')
+            elif zone_price < 1:
+                zone_str = f"{zone_price:.3f}".rstrip('0').rstrip('.')
+            else:
+                zone_str = f"{zone_price:.2f}"
+            
+            tf_display_name = tf_display.get(tf_name, tf_name)
+            entry_zones.append(f"{zone_str} ({tf_display_name})")
+        
+        # Убираем дубликаты
+        seen_prices = []
+        unique_zones = []
+        for zone in entry_zones:
+            try:
+                price = float(zone.split(' (')[0])
+                is_dup = False
+                for seen in seen_prices:
+                    if abs(price - seen) / price < 0.01:
+                        is_dup = True
+                        break
+                if not is_dup:
+                    seen_prices.append(price)
+                    unique_zones.append(zone)
+            except:
+                unique_zones.append(zone)
+        
+        return unique_zones[:3]
+
     async def send_signal(self, signal: Dict, pump_only: bool = False):
         if pump_only and not signal.get('pump_dump'):
             return
@@ -9967,6 +10052,10 @@ class MultiExchangeScannerBot:
         if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
             pump_percent = signal['pump_dump'][0].get('change_percent')
         
+        # Пересчитываем зоны добора
+        if signal.get('entry_zones') is None:
+            signal['entry_zones'] = self.calculate_entry_zones(signal, dataframes) if dataframes else []
+
         msg, keyboard = self.format_message(signal, contract_info, pump_percent)
         
         if signal.get('signal_type') == 'accumulation':
@@ -10535,6 +10624,11 @@ class MultiExchangeScannerBot:
 
                                         # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
                                         pump_percent = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
+                                        
+                                        # Пересчитываем зоны добора
+                                        if signal.get('entry_zones') is None:
+                                            signal['entry_zones'] = self.calculate_entry_zones(signal, dataframes) if dataframes else []
+                                        
                                         filtered_msg, _ = self.format_message(signal, contract_info, pump_percent)
                                         
                                         # Отправляем VIP сигнал с НОВЫМ сообщением
@@ -10596,6 +10690,11 @@ class MultiExchangeScannerBot:
 
                                     # ✅ СОЗДАЁМ НОВОЕ СООБЩЕНИЕ С ОТФИЛЬТРОВАННЫМИ ПРИЧИНАМИ
                                     pump_percent = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
+
+                                    # Пересчитываем зоны добора
+                                    if signal.get('entry_zones') is None:
+                                        signal['entry_zones'] = self.calculate_entry_zones(signal, dataframes) if dataframes else []
+
                                     filtered_msg, _ = self.format_message(signal, contract_info, pump_percent)
                                     
                                     # ✅ Загружаем данные для графика
