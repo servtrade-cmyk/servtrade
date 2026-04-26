@@ -7827,6 +7827,7 @@ class MultiTimeframeAnalyzer:
         if accumulation_analysis:
             result['accumulation'] = accumulation_analysis
         
+        logger.info(f"  🔍 entry_zones перед result: {entry_zones}")
         logger.info(f"✅ generate_signal успешно завершен для {symbol}")
         return result
     
