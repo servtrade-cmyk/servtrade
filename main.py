@@ -7741,9 +7741,7 @@ class MultiTimeframeAnalyzer:
             'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'alignment': alignment,
             'bearish_score': bearish_score,  # ← ДОБАВИТЬ
-            'bullish_score': bullish_score,  # ← ДОБАВИТЬ (опционально)
-            #'entry_zones': formatted_zones,
-            #'entry_zones': entry_zones,
+            'bullish_score': bullish_score,  # ← ДОБАВИТЬ (опционально)            
             'tf_alignment_percentage': tf_alignment['percentage'],
             'tf_aligned_count': tf_alignment['aligned_count'],
             'tf_total_count': tf_alignment['total_count'],
@@ -7842,89 +7840,10 @@ class MultiTimeframeAnalyzer:
         if fib_analysis:
             result['fibonacci'] = fib_analysis
         if accumulation_analysis:
-            result['accumulation'] = accumulation_analysis
+            result['accumulation'] = accumulation_analysis        
         
-        # # ===== ФИНАЛЬНЫЙ РАСЧЁТ ЗОН ДОБОРА =====
-        # from config import ENTRY_ZONES_GUARANTEED
-
-        # entry_zones = []
-
-        # if ENTRY_ZONES_GUARANTEED.get('enabled', True):
-        #     is_long = direction.startswith('LONG')
-        #     zone_config = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-        #     target_tfs = zone_config.get('timeframes', ['15m', '1h', '4h'])
-        #     lookback = zone_config.get('lookback', 20)
-        #     zone_type = zone_config.get('zone_type', 'low')
-        #     tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
-            
-        #     for tf_name in target_tfs:
-        #         tf_map = {'15m': 'current', '1h': 'hourly', '4h': 'four_hourly', '1d': 'daily', '1w': 'weekly'}
-        #         df_key = tf_map.get(tf_name, tf_name)
-                
-        #         if df_key not in dataframes or dataframes[df_key] is None or dataframes[df_key].empty:
-        #             continue
-                
-        #         df_tf = dataframes[df_key]
-        #         lookback_actual = min(lookback, len(df_tf))
-                
-        #         if zone_type == 'high':
-        #             highs = df_tf['high'].tail(lookback_actual)
-        #             highs_above = highs[highs > current_price]
-        #             if len(highs_above) > 0:
-        #                 zone_price = highs_above.min()
-        #             else:
-        #                 continue
-        #         else:
-        #             lows = df_tf['low'].tail(lookback_actual)
-        #             lows_below = lows[lows < current_price]
-        #             if len(lows_below) > 0:
-        #                 zone_price = lows_below.max()
-        #             else:
-        #                 continue
-                
-        #         # Форматирование
-        #         if zone_price < 0.00001:
-        #             zone_str = f"{zone_price:.8f}".rstrip('0').rstrip('.')
-        #         elif zone_price < 0.0001:
-        #             zone_str = f"{zone_price:.7f}".rstrip('0').rstrip('.')
-        #         elif zone_price < 0.001:
-        #             zone_str = f"{zone_price:.6f}".rstrip('0').rstrip('.')
-        #         elif zone_price < 0.01:
-        #             zone_str = f"{zone_price:.5f}".rstrip('0').rstrip('.')
-        #         elif zone_price < 0.1:
-        #             zone_str = f"{zone_price:.4f}".rstrip('0').rstrip('.')
-        #         elif zone_price < 1:
-        #             zone_str = f"{zone_price:.3f}".rstrip('0').rstrip('.')
-        #         else:
-        #             zone_str = f"{zone_price:.2f}"
-                
-        #         tf_display_name = tf_display.get(tf_name, tf_name)
-        #         entry_zones.append(f"{zone_str} ({tf_display_name})")
-
-        # # Убираем дубликаты
-        # seen_prices = []
-        # unique_zones = []
-        # for zone in entry_zones:
-        #     try:
-        #         price = float(zone.split(' (')[0])
-        #         is_dup = False
-        #         for seen in seen_prices:
-        #             if abs(price - seen) / price < 0.01:
-        #                 is_dup = True
-        #                 break
-        #         if not is_dup:
-        #             seen_prices.append(price)
-        #             unique_zones.append(zone)
-        #     except:
-        #         unique_zones.append(zone)
-
-        # entry_zones = unique_zones[:3]
-        # result['entry_zones'] = entry_zones
-
-        # logger.info(f"  🔍 НАЧАЛО РАСЧЁТА ЗОН ДОБОРА, direction='{direction}'")
-        # #logger.info(f"  🔍 entry_zones перед result: {entry_zones}")
-        # logger.info(f"✅ generate_signal успешно завершен для {symbol}")
-        # return result
+        logger.info(f"✅ generate_signal успешно завершен для {symbol}")
+        return result
     
     def _get_power_text(self, confidence: float) -> str:
         """Определение текста силы сигнала по уверенности"""
