@@ -7921,6 +7921,7 @@ class MultiTimeframeAnalyzer:
         entry_zones = unique_zones[:3]
         result['entry_zones'] = entry_zones
 
+        logger.info(f"  🔍 НАЧАЛО РАСЧЁТА ЗОН ДОБОРА, direction='{direction}'")
         #logger.info(f"  🔍 entry_zones перед result: {entry_zones}")
         logger.info(f"✅ generate_signal успешно завершен для {symbol}")
         return result
