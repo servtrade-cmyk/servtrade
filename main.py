@@ -7629,11 +7629,28 @@ class MultiTimeframeAnalyzer:
                 df_tf = dataframes[df_key]
                 lookback_actual = min(lookback, len(df_tf))
                 
+                # if zone_type == 'high':
+                #     zone_price = df_tf['high'].tail(lookback_actual).max()
+                # else:
+                #     zone_price = df_tf['low'].tail(lookback_actual).min()
                 if zone_type == 'high':
-                    zone_price = df_tf['high'].tail(lookback_actual).max()
+                    # Для SHORT: ищем ближайший максимум ВЫШЕ цены
+                    highs = df_tf['high'].tail(lookback_actual)
+                    highs_above = highs[highs > current_price]
+                    if len(highs_above) > 0:
+                        zone_price = highs_above.min()  # Ближайшее сопротивление
+                    else:
+                        continue  # Нет хаёв выше цены — пропускаем ТФ
                 else:
-                    zone_price = df_tf['low'].tail(lookback_actual).min()
-                
+                    # Для LONG: ищем ближайший минимум НИЖЕ цены
+                    lows = df_tf['low'].tail(lookback_actual)
+                    lows_below = lows[lows < current_price]
+                    if len(lows_below) > 0:
+                        zone_price = lows_below.max()  # Ближайшая поддержка
+                    else:
+                        continue  # Нет лоёв ниже цены — пропускаем ТФ
+
+
                 # Форматируем цену
                 if zone_price < 0.00001:
                     zone_str = f"{zone_price:.8f}".rstrip('0').rstrip('.')
@@ -8661,7 +8678,7 @@ class FastPumpScanner:
                     signal_text = f"DUMP {pump_change:.1f}%"
                     signal['direction'] = 'LONG 📈 (отскок)'
                     signal['signal_type'] = 'DUMP'
-                    
+                                        
                     # ===== ДОБАВИТЬ ПЕРЕСЧЕТ ЦЕЛЕЙ ДЛЯ LONG =====
                     current_price = signal['price']
                     atr = signal.get('atr', 0)
