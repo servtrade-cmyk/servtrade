@@ -7844,87 +7844,87 @@ class MultiTimeframeAnalyzer:
         if accumulation_analysis:
             result['accumulation'] = accumulation_analysis
         
-        # ===== ФИНАЛЬНЫЙ РАСЧЁТ ЗОН ДОБОРА =====
-        from config import ENTRY_ZONES_GUARANTEED
+        # # ===== ФИНАЛЬНЫЙ РАСЧЁТ ЗОН ДОБОРА =====
+        # from config import ENTRY_ZONES_GUARANTEED
 
-        entry_zones = []
+        # entry_zones = []
 
-        if ENTRY_ZONES_GUARANTEED.get('enabled', True):
-            is_long = direction.startswith('LONG')
-            zone_config = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-            target_tfs = zone_config.get('timeframes', ['15m', '1h', '4h'])
-            lookback = zone_config.get('lookback', 20)
-            zone_type = zone_config.get('zone_type', 'low')
-            tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
+        # if ENTRY_ZONES_GUARANTEED.get('enabled', True):
+        #     is_long = direction.startswith('LONG')
+        #     zone_config = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
+        #     target_tfs = zone_config.get('timeframes', ['15m', '1h', '4h'])
+        #     lookback = zone_config.get('lookback', 20)
+        #     zone_type = zone_config.get('zone_type', 'low')
+        #     tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
             
-            for tf_name in target_tfs:
-                tf_map = {'15m': 'current', '1h': 'hourly', '4h': 'four_hourly', '1d': 'daily', '1w': 'weekly'}
-                df_key = tf_map.get(tf_name, tf_name)
+        #     for tf_name in target_tfs:
+        #         tf_map = {'15m': 'current', '1h': 'hourly', '4h': 'four_hourly', '1d': 'daily', '1w': 'weekly'}
+        #         df_key = tf_map.get(tf_name, tf_name)
                 
-                if df_key not in dataframes or dataframes[df_key] is None or dataframes[df_key].empty:
-                    continue
+        #         if df_key not in dataframes or dataframes[df_key] is None or dataframes[df_key].empty:
+        #             continue
                 
-                df_tf = dataframes[df_key]
-                lookback_actual = min(lookback, len(df_tf))
+        #         df_tf = dataframes[df_key]
+        #         lookback_actual = min(lookback, len(df_tf))
                 
-                if zone_type == 'high':
-                    highs = df_tf['high'].tail(lookback_actual)
-                    highs_above = highs[highs > current_price]
-                    if len(highs_above) > 0:
-                        zone_price = highs_above.min()
-                    else:
-                        continue
-                else:
-                    lows = df_tf['low'].tail(lookback_actual)
-                    lows_below = lows[lows < current_price]
-                    if len(lows_below) > 0:
-                        zone_price = lows_below.max()
-                    else:
-                        continue
+        #         if zone_type == 'high':
+        #             highs = df_tf['high'].tail(lookback_actual)
+        #             highs_above = highs[highs > current_price]
+        #             if len(highs_above) > 0:
+        #                 zone_price = highs_above.min()
+        #             else:
+        #                 continue
+        #         else:
+        #             lows = df_tf['low'].tail(lookback_actual)
+        #             lows_below = lows[lows < current_price]
+        #             if len(lows_below) > 0:
+        #                 zone_price = lows_below.max()
+        #             else:
+        #                 continue
                 
-                # Форматирование
-                if zone_price < 0.00001:
-                    zone_str = f"{zone_price:.8f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.0001:
-                    zone_str = f"{zone_price:.7f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.001:
-                    zone_str = f"{zone_price:.6f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.01:
-                    zone_str = f"{zone_price:.5f}".rstrip('0').rstrip('.')
-                elif zone_price < 0.1:
-                    zone_str = f"{zone_price:.4f}".rstrip('0').rstrip('.')
-                elif zone_price < 1:
-                    zone_str = f"{zone_price:.3f}".rstrip('0').rstrip('.')
-                else:
-                    zone_str = f"{zone_price:.2f}"
+        #         # Форматирование
+        #         if zone_price < 0.00001:
+        #             zone_str = f"{zone_price:.8f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.0001:
+        #             zone_str = f"{zone_price:.7f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.001:
+        #             zone_str = f"{zone_price:.6f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.01:
+        #             zone_str = f"{zone_price:.5f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 0.1:
+        #             zone_str = f"{zone_price:.4f}".rstrip('0').rstrip('.')
+        #         elif zone_price < 1:
+        #             zone_str = f"{zone_price:.3f}".rstrip('0').rstrip('.')
+        #         else:
+        #             zone_str = f"{zone_price:.2f}"
                 
-                tf_display_name = tf_display.get(tf_name, tf_name)
-                entry_zones.append(f"{zone_str} ({tf_display_name})")
+        #         tf_display_name = tf_display.get(tf_name, tf_name)
+        #         entry_zones.append(f"{zone_str} ({tf_display_name})")
 
-        # Убираем дубликаты
-        seen_prices = []
-        unique_zones = []
-        for zone in entry_zones:
-            try:
-                price = float(zone.split(' (')[0])
-                is_dup = False
-                for seen in seen_prices:
-                    if abs(price - seen) / price < 0.01:
-                        is_dup = True
-                        break
-                if not is_dup:
-                    seen_prices.append(price)
-                    unique_zones.append(zone)
-            except:
-                unique_zones.append(zone)
+        # # Убираем дубликаты
+        # seen_prices = []
+        # unique_zones = []
+        # for zone in entry_zones:
+        #     try:
+        #         price = float(zone.split(' (')[0])
+        #         is_dup = False
+        #         for seen in seen_prices:
+        #             if abs(price - seen) / price < 0.01:
+        #                 is_dup = True
+        #                 break
+        #         if not is_dup:
+        #             seen_prices.append(price)
+        #             unique_zones.append(zone)
+        #     except:
+        #         unique_zones.append(zone)
 
-        entry_zones = unique_zones[:3]
-        result['entry_zones'] = entry_zones
+        # entry_zones = unique_zones[:3]
+        # result['entry_zones'] = entry_zones
 
-        logger.info(f"  🔍 НАЧАЛО РАСЧЁТА ЗОН ДОБОРА, direction='{direction}'")
-        #logger.info(f"  🔍 entry_zones перед result: {entry_zones}")
-        logger.info(f"✅ generate_signal успешно завершен для {symbol}")
-        return result
+        # logger.info(f"  🔍 НАЧАЛО РАСЧЁТА ЗОН ДОБОРА, direction='{direction}'")
+        # #logger.info(f"  🔍 entry_zones перед result: {entry_zones}")
+        # logger.info(f"✅ generate_signal успешно завершен для {symbol}")
+        # return result
     
     def _get_power_text(self, confidence: float) -> str:
         """Определение текста силы сигнала по уверенности"""
@@ -9016,10 +9016,33 @@ class FastPumpScanner:
         #         formatted = [f"{fmt_price(z['price'])} ({z['tf']})" for z in sorted_zones]
         #         line9 += f"\n🟣 Зоны добора: {' | '.join(formatted)}"
 
+        # # Зоны добора
+        # entry_zones = signal.get('entry_zones', [])
+        # if entry_zones:
+        #     line9 += f"\n🟣 Зоны добора: {' | '.join(entry_zones)}"
+
         # Зоны добора
         entry_zones = signal.get('entry_zones', [])
+        if not entry_zones:
+            # Считаем прямо здесь
+            direction = signal.get('direction', '')
+            current_price = signal.get('price', 0)
+            is_long = direction.startswith('LONG')
+            
+            zones = []
+            # Используем зоны из сигнала (без dataframes)
+            # Берём target_1/stop_loss для примерных зон
+            if is_long:
+                if signal.get('stop_loss'):
+                    zones.append(f"{format_target(signal['stop_loss'])} (стоп)")
+            else:
+                if signal.get('stop_loss'):
+                    zones.append(f"{format_target(signal['stop_loss'])} (стоп)")
+            
+            entry_zones = zones
+
         if entry_zones:
-            line9 += f"\n🟣 Зоны добора: {' | '.join(entry_zones)}"
+            lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
 
         # Risk/Reward
         if signal.get('rr_ratio', 0) > 0 or (risk_pct > 0 and reward_pct > 0):
@@ -9731,8 +9754,31 @@ class MultiExchangeScannerBot:
         #         formatted = [f"{fmt_price(z['price'])} ({z['tf']})" for z in sorted_zones]
         #         lines.append(f"🟣 Зоны добора: {' | '.join(formatted)}")
 
+        # # Зоны добора
+        # entry_zones = signal.get('entry_zones', [])
+        # if entry_zones:
+        #     lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
+
         # Зоны добора
         entry_zones = signal.get('entry_zones', [])
+        if not entry_zones:
+            # Считаем прямо здесь
+            direction = signal.get('direction', '')
+            current_price = signal.get('price', 0)
+            is_long = direction.startswith('LONG')
+            
+            zones = []
+            # Используем зоны из сигнала (без dataframes)
+            # Берём target_1/stop_loss для примерных зон
+            if is_long:
+                if signal.get('stop_loss'):
+                    zones.append(f"{format_target(signal['stop_loss'])} (стоп)")
+            else:
+                if signal.get('stop_loss'):
+                    zones.append(f"{format_target(signal['stop_loss'])} (стоп)")
+            
+            entry_zones = zones
+
         if entry_zones:
             lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
 
@@ -10134,6 +10180,11 @@ class MultiExchangeScannerBot:
         if signal.get('entry_zones') is None:
             signal['entry_zones'] = self.calculate_entry_zones(signal, dataframes) if dataframes else []
 
+        # Пересчитываем зоны если направление изменилось
+        if 'SHORT' in signal.get('direction', '') and signal.get('entry_zones'):
+            # Зоны посчитаны для LONG — очищаем
+            signal['entry_zones'] = []
+        
         msg, keyboard = self.format_message(signal, contract_info, pump_percent)
         
         if signal.get('signal_type') == 'accumulation':
