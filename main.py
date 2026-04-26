@@ -10108,6 +10108,13 @@ class MultiExchangeScannerBot:
         coin = self.extract_coin(signal['symbol'])
         current_time = datetime.now()
         
+        # Загружаем dataframes для зон добора
+        dataframes = None
+        for fetcher in self.fetchers.values():
+            if fetcher.name == signal.get('exchange', 'BingX'):
+                dataframes = await self._load_dataframes_for_symbol(fetcher, signal['symbol'])
+                break
+        
         # ЗАЩИТА ОТ ДУБЛИРОВАНИЯ
         # ✅ Проверяем, не было ли сигнала по этой монете за последние 5 минут
         if hasattr(self, 'last_signal_time'):
