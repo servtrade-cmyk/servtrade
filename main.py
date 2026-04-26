@@ -7611,6 +7611,8 @@ class MultiTimeframeAnalyzer:
             lookback = zone_config.get('lookback', 20)
             zone_type = zone_config.get('zone_type', 'low')
             tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
+
+            logger.info(f"  🔍 ЗОНЫ ДОБОРА: direction='{direction}', is_long={is_long}, zone_type={zone_type}")
             
             for tf_name in target_tfs:
                 # Маппинг ТФ
@@ -8981,7 +8983,7 @@ class FastPumpScanner:
         reasons_lines = [f"     {r}" for r in filtered_reasons[:8]]
 
         # Собираем сообщение
-        lines = [line1, line2, line3, line4, line5, line6, line7]
+        lines = [line1, line2, line3, line4, line5, line6]
         if line8:
             lines.append(line8)
         lines.extend([line9, line10, line11])
