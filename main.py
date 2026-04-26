@@ -10215,7 +10215,13 @@ class MultiExchangeScannerBot:
         # ✅ Если dataframes не переданы — создаём пустой словарь
         if dataframes is None:
             dataframes = {}
-            logger.warning(f"⚠️ dataframes не переданы в send_pump_signal для {coin}")
+            # logger.warning(f"⚠️ dataframes не переданы в send_pump_signal для {coin}")
+
+        if not dataframes:
+            for fetcher in self.fetchers.values():
+                if fetcher.name == signal.get('exchange', 'BingX'):
+                    dataframes = await self._load_dataframes_for_symbol(fetcher, signal['symbol'])
+                    break
 
         # ✅ ЗАЩИТА ОТ ДУБЛИРОВАНИЯ
         if hasattr(self, 'last_signal_time'):
