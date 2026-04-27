@@ -1968,6 +1968,15 @@ class PatternAnalyzer:
         self.settings = settings or PATTERN_SETTINGS
         self.tolerance = self.settings.get('double_top_bottom', {}).get('max_price_diff_pct', 1.0) / 100
     
+    def fmt_price(self, p):
+        if p < 0.00001: return f"{p:.8f}".rstrip('0').rstrip('.')
+        elif p < 0.0001: return f"{p:.7f}".rstrip('0').rstrip('.')
+        elif p < 0.001: return f"{p:.6f}".rstrip('0').rstrip('.')
+        elif p < 0.01: return f"{p:.5f}".rstrip('0').rstrip('.')
+        elif p < 0.1: return f"{p:.4f}".rstrip('0').rstrip('.')
+        elif p < 1: return f"{p:.3f}".rstrip('0').rstrip('.')
+        else: return f"{p:.2f}"
+
     def _apply_aging(self, result: Dict, age_bars: int, df: pd.DataFrame = None, 
                     pattern_type: str = None, idx1: int = None, idx2: int = None, 
                     tf_name: str = None) -> Dict:
@@ -2071,7 +2080,8 @@ class PatternAnalyzer:
                 result['direction'] = 'SHORT'
                 result['level'] = highs[i]
                 result['strength'] = cfg.get('strength', 70)
-                result['description'] = f"🔻 ДВОЙНАЯ ВЕРШИНА на {tf_name}: {highs[i]:.4f}"
+                # result['description'] = f"🔻 ДВОЙНАЯ ВЕРШИНА на {tf_name}: {highs[i]:.4f}"
+                result['description'] = f"🔻 ДВОЙНАЯ ВЕРШИНА на {tf_name}: {self.fmt_price(highs[i])}"
                 # Рассчитываем возраст паттерна
                 age_bars = len(df) - j  # j - индекс второй вершины
                 result = self._apply_aging(result, age_bars, df, result['type'], i, j, tf_name)
@@ -2954,7 +2964,7 @@ class SmartMoneyAnalyzer:
                             'price_max': df['high'].iloc[j],
                             'strength': min(100, abs(price_move) * 12),
                             'timeframe': tf_name,
-                            'description': f"📦 Бычий OB на {tf_name}: {df['low'].iloc[j]:.4f}-{df['high'].iloc[j]:.4f}"
+                            'description': f"📦 Бычий OB на {tf_name}: {self.fmt_price(df['low'].iloc[j])}-{self.fmt_price(df['high'].iloc[j])}"
                         })
                         break
             else:  # Медвежий OB
@@ -2966,7 +2976,7 @@ class SmartMoneyAnalyzer:
                             'price_max': df['high'].iloc[j],
                             'strength': min(100, abs(price_move) * 12),
                             'timeframe': tf_name,
-                            'description': f"📦 Медвежий OB на {tf_name}: {df['low'].iloc[j]:.4f}-{df['high'].iloc[j]:.4f}"
+                            'description': f"📦 Медвежий OB на {tf_name}: {self.fmt_price(df['low'].iloc[j])}-{self.fmt_price(df['high'].iloc[j])}"
                         })
                         break
         
@@ -3114,17 +3124,17 @@ class SmartMoneyAnalyzer:
             result['has_zone'] = True
             result['zone_type'] = 'premium'
             result['direction'] = 'SHORT'
-            result['description'] = f"📊 Premium Zone на {tf_name}: цена {current_price:.4f} (перекупленность)"
+            result['description'] = f"📊 Premium Zone на {tf_name}: цена {self.fmt_price(current_price)} (перекупленность)"
         elif current_price < discount_zone:
             result['has_zone'] = True
             result['zone_type'] = 'discount'
             result['direction'] = 'LONG'
-            result['description'] = f"📊 Discount Zone на {tf_name}: цена {current_price:.4f} (перепроданность)"
+            result['description'] = f"📊 Discount Zone на {tf_name}: цена {self.fmt_price(current_price)} (перепроданность)"
         elif abs(current_price - equilibrium) / equilibrium * 100 < 1.0:
             result['has_zone'] = True
             result['zone_type'] = 'equilibrium'
             result['direction'] = None
-            result['description'] = f"⚖️ Equilibrium Zone на {tf_name}: цена {current_price:.4f} (равновесие, возможна цель)"
+            result['description'] = f"⚖️ Equilibrium Zone на {tf_name}: цена {self.fmt_price(current_price)} (равновесие, возможна цель)"
         
         return result
 
@@ -3174,7 +3184,7 @@ class SmartMoneyAnalyzer:
                         result['type'] = 'EQH'
                         result['price'] = current_high
                         result['strength'] = 70
-                        result['description'] = f"📐 EQH (Equal High) на {tf_name}: {current_high:.4f} — уровень ликвидности"
+                        result['description'] = f"📐 EQH (Equal High) на {tf_name}: {self.fmt_price(current_high)} — уровень ликвидности"
                         break
             if result['has_equal']:
                 break
@@ -3195,7 +3205,7 @@ class SmartMoneyAnalyzer:
                             result['type'] = 'EQL'
                             result['price'] = current_low
                             result['strength'] = 70
-                            result['description'] = f"📐 EQL (Equal Low) на {tf_name}: {current_low:.4f} — уровень ликвидности"
+                            result['description'] = f"📐 EQL (Equal Low) на {tf_name}: {self.fmt_price(current_low)} — уровень ликвидности"
                             break
                 if result['has_equal']:
                     break
@@ -10073,7 +10083,7 @@ class MultiExchangeScannerBot:
                             if len(zones) >= max_zones:
                                 break
                 
-                logger.info(f"🔍 ПАМП ЗОНЫ: df_key={df_key}, df_tf={'OK' if df_tf is not None else 'None'}, zones={len(zones)}")
+                logger.info(f"🔍 ПАМП ЗОНЫ: dataframes keys={list(dataframes.keys())}, tf_key={tf_name}, df_tf={'OK' if df_tf is not None else 'None'}, zones={len(zones)}")
 
                 # if zones:
                 #     # Добавляем зоны в pump_data['message']
@@ -10102,18 +10112,7 @@ class MultiExchangeScannerBot:
                     parse_mode='HTML',
                     reply_markup=pump_data['keyboard']
                 )
-
-            if df is not None and not df.empty:
-                df = self.analyzer.calculate_indicators(df)
-                chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
-                
-                await self.telegram_bot.send_photo(
-                    chat_id=PUMP_CHAT_ID,
-                    photo=chart_buf,
-                    caption=pump_data['message'],
-                    parse_mode='HTML',
-                    reply_markup=pump_data['keyboard']
-                )
+            
                 logger.info(f"✅ Отправлен памп-сигнал с графиком: {signal['symbol']}")
             else:
                 await self.telegram_bot.send_message(
