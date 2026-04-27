@@ -10029,6 +10029,7 @@ class MultiExchangeScannerBot:
                 break
         
         try:
+            logger.info(f"🔍 ПАМП ЗОНЫ: dataframes={dataframes is not None}, keys={list(dataframes.keys()) if dataframes else 'None'}")
             # ✅ Добавить расчёт зон для обычного пампа
             if not signal.get('entry_zones') and dataframes:
                 from config import ENTRY_ZONES_GUARANTEED
@@ -10072,9 +10073,16 @@ class MultiExchangeScannerBot:
                             if len(zones) >= max_zones:
                                 break
                 
+                logger.info(f"🔍 ПАМП ЗОНЫ: df_key={df_key}, df_tf={'OK' if df_tf is not None else 'None'}, zones={len(zones)}")
+
                 if zones:
                     # Добавляем зоны в pump_data['message']
-                    pump_data['message'] += f"\n🟣 Зоны добора: {' | '.join(zones)}"
+                    zones_text = f"🟣 Зоны добора: {' | '.join(zones)}\n"
+                    # Вставляем перед "💡 Причины:"
+                    if "💡 Причины:" in pump_data['message']:
+                        pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n💡 Причины:")
+                    else:
+                        pump_data['message'] += f"\n{zones_text}"
             
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
