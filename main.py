@@ -10084,13 +10084,13 @@ class MultiExchangeScannerBot:
                 #     else:
                 #         pump_data['message'] += f"\n{zones_text}"
                 if zones:
-                zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
-                if "📊 Риск/Прибыль:" in pump_data['message']:
-                    pump_data['message'] = pump_data['message'].replace("📊 Риск/Прибыль:", f"{zones_text}\n📊 Риск/Прибыль:")
-                elif "💡 Причины:" in pump_data['message']:
-                    pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
-                else:
-                    pump_data['message'] += f"\n{zones_text}"
+                    zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
+                    if "📊 Риск/Прибыль:" in pump_data['message']:
+                        pump_data['message'] = pump_data['message'].replace("📊 Риск/Прибыль:", f"{zones_text}\n📊 Риск/Прибыль:")
+                    elif "💡 Причины:" in pump_data['message']:
+                        pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
+                    else:
+                        pump_data['message'] += f"\n{zones_text}"
             
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
