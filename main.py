@@ -2014,13 +2014,13 @@ class PatternAnalyzer:
                 recent_highs = df['high'].tail(5)
                 if any(h > neckline * 1.01 for h in recent_highs):
                     result['strength'] = int(result['strength'] * 0.7)
-                    result['description'] += " ⚠️ (ложный?)"
+                    result['description'] += " ⚠️ (не подтверждён)"
             else:
                 neckline = max(df['high'].iloc[idx1:idx2])
                 recent_lows = df['low'].tail(5)
                 if any(l < neckline * 0.99 for l in recent_lows):
                     result['strength'] = int(result['strength'] * 0.7)
-                    result['description'] += " ⚠️ (ложный?)"
+                    result['description'] += " ⚠️ (не подтверждён)"
         
         # 3. Сохраняем возраст
         result['age_bars'] = age_bars
@@ -6134,7 +6134,7 @@ class MultiTimeframeAnalyzer:
         order_blocks_analysis = self.find_order_blocks_multi_timeframe(dataframes)
         if order_blocks_analysis.get('has_order_block', False):
             for block in order_blocks_analysis['blocks'][:2]:
-                reasons.append(f"📦 {block.get('description', 'Order Block')} на {block.get('timeframe', '?')}")
+                reasons.append(f"📦 {block.get('description', 'Order Block')}")
             confidence += order_blocks_analysis['strength'] / 10
             logger.info(f"  ✅ {symbol} - Найдено Order Blocks: {len(order_blocks_analysis['blocks'])}")
 
@@ -8991,7 +8991,7 @@ class FastPumpScanner:
         if not filtered_reasons:
             filtered_reasons = clean_reasons[:5]
         
-        reasons_lines = [f"     {r}" for r in filtered_reasons[:8]]
+        reasons_lines = [f"{r}" for r in filtered_reasons[:8]]
 
         # Собираем сообщение
         lines = [line1, line2, line3, line4, line5, line6]
