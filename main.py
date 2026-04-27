@@ -10064,7 +10064,11 @@ class MultiExchangeScannerBot:
                 tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
                 tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
                 df_key = tf_map.get(tf_name, 'hourly')
+
                 df_tf = dataframes.get(df_key)
+                if df_tf is None:
+                    df_key = 'current'
+                    df_tf = dataframes.get(df_key)
                 
                 logger.info(f"🔍 ПАМП ЗОНЫ: ищу df_key={df_key}, есть в dataframes={df_key in dataframes}")
 
@@ -10107,10 +10111,10 @@ class MultiExchangeScannerBot:
                 #         pump_data['message'] += f"\n{zones_text}"
                 if zones:
                     zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
-                    if "📊 Риск/Прибыль:" in pump_data['message']:
-                        pump_data['message'] = pump_data['message'].replace("📊 Риск/Прибыль:", f"{zones_text}\n📊 Риск/Прибыль:")
-                    elif "💡 Причины:" in pump_data['message']:
+                    if "💡 Причины:" in pump_data['message']:
                         pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
+                    elif "📊 Риск/Прибыль:" in pump_data['message']:
+                        pump_data['message'] = pump_data['message'].replace("📊 Риск/Прибыль:", f"{zones_text}\n📊 Риск/Прибыль:")
                     else:
                         pump_data['message'] += f"\n{zones_text}"
             
