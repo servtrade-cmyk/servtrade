@@ -1412,7 +1412,7 @@ VIP_PUMP_SETTINGS = {
     'min_pump_change': 7.0,
     'min_confidence': 0,
     'min_volume_ratio': 1.0,
-    'cooldown_minutes': 60,
+    'cooldown_minutes': 30,
     'min_indicators': 2,
     
     'indicators': {
