@@ -2916,7 +2916,7 @@ class SmartMoneyAnalyzer:
         elif p < 0.1: return f"{p:.4f}".rstrip('0').rstrip('.')
         elif p < 1: return f"{p:.3f}".rstrip('0').rstrip('.')
         else: return f"{p:.2f}"
-    
+
     def _is_swing_high(self, df: pd.DataFrame, idx: int, window: int = 5) -> bool:
         """Проверка, является ли свеча локальным максимумом"""
         if idx < window or idx >= len(df) - window:
@@ -9224,6 +9224,7 @@ class MultiExchangeScannerBot:
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
                 dataframes[tf_name] = df
+        logger.info(f"🔍 Загружено ТФ для {symbol}: {list(dataframes.keys())}")
         return dataframes if dataframes else None
 
     async def _recalculate_signal(self, pair: str, metadata: Dict) -> Optional[Dict]:
@@ -10065,6 +10066,8 @@ class MultiExchangeScannerBot:
                 df_key = tf_map.get(tf_name, 'hourly')
                 df_tf = dataframes.get(df_key)
                 
+                logger.info(f"🔍 ПАМП ЗОНЫ: ищу df_key={df_key}, есть в dataframes={df_key in dataframes}")
+
                 zones = []
                 if df_tf is not None and not df_tf.empty:
                     lb = min(lookback, len(df_tf))
