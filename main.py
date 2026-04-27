@@ -8901,7 +8901,7 @@ class FastPumpScanner:
             zones = []
             if df_tf is not None and not df_tf.empty:
                 # Пропускаем offset свечей от конца
-                end_idx = len(df_tf) - offset
+                end_idx = max(offset, len(df_tf) - offset)
                 start_idx = max(0, end_idx - lookback)
                 df_window = df_tf.iloc[start_idx:end_idx]
                 
@@ -9573,7 +9573,7 @@ class MultiExchangeScannerBot:
             zones = []
             if df_tf is not None and not df_tf.empty:
                 # Пропускаем offset свечей от конца
-                end_idx = len(df_tf) - offset
+                end_idx = max(offset, len(df_tf) - offset)
                 start_idx = max(0, end_idx - lookback)
                 df_window = df_tf.iloc[start_idx:end_idx]
                 
