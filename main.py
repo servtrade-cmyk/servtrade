@@ -8936,11 +8936,11 @@ class FastPumpScanner:
         if entry_zones:
             lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
 
-        # Risk/Reward
-        if signal.get('rr_ratio', 0) > 0 or (risk_pct > 0 and reward_pct > 0):
-            rr = signal.get('rr_ratio', 0) or reward_pct / risk_pct if risk_pct > 0 else 0
-            if rr > 0:
-                line9 += f"\n📊 Риск/Прибыль: 1:{rr:.0f}"
+        # # Risk/Reward
+        # if signal.get('rr_ratio', 0) > 0 or (risk_pct > 0 and reward_pct > 0):
+        #     rr = signal.get('rr_ratio', 0) or reward_pct / risk_pct if risk_pct > 0 else 0
+        #     if rr > 0:
+        #         line9 += f"\n📊 Риск/Прибыль: 1:{rr:.0f}"
 
         line10 = ""
         line11 = "💡 Причины:"
@@ -10075,14 +10075,22 @@ class MultiExchangeScannerBot:
                 
                 logger.info(f"🔍 ПАМП ЗОНЫ: df_key={df_key}, df_tf={'OK' if df_tf is not None else 'None'}, zones={len(zones)}")
 
+                # if zones:
+                #     # Добавляем зоны в pump_data['message']
+                #     zones_text = f"🟣 Зоны добора: {' | '.join(zones)}\n"
+                #     # Вставляем перед "💡 Причины:"
+                #     if "💡 Причины:" in pump_data['message']:
+                #         pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n💡 Причины:")
+                #     else:
+                #         pump_data['message'] += f"\n{zones_text}"
                 if zones:
-                    # Добавляем зоны в pump_data['message']
-                    zones_text = f"🟣 Зоны добора: {' | '.join(zones)}\n"
-                    # Вставляем перед "💡 Причины:"
-                    if "💡 Причины:" in pump_data['message']:
-                        pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n💡 Причины:")
-                    else:
-                        pump_data['message'] += f"\n{zones_text}"
+                zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
+                if "📊 Риск/Прибыль:" in pump_data['message']:
+                    pump_data['message'] = pump_data['message'].replace("📊 Риск/Прибыль:", f"{zones_text}\n📊 Риск/Прибыль:")
+                elif "💡 Причины:" in pump_data['message']:
+                    pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
+                else:
+                    pump_data['message'] += f"\n{zones_text}"
             
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
