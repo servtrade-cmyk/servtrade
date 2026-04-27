@@ -9661,7 +9661,7 @@ class MultiExchangeScannerBot:
         # Добавляем процент согласованности в начало причин
         if signal.get('tf_alignment_percentage'):
             alignment_text = f"📊 Согласованность ТФ: {signal['tf_alignment_percentage']}% ({signal.get('tf_aligned_count', 0)}/{signal.get('tf_total_count', 6)})"
-            lines.append(f"     {alignment_text}")
+            lines.append(f"{alignment_text}")
 
         # Очистка и группировка причин
         clean_reasons = []
@@ -9673,7 +9673,7 @@ class MultiExchangeScannerBot:
             # Заменяем VWAP на понятное
             clean_reason = clean_reason.replace("Цена выше VWAP", "Цена выше справедливой стоимости (VWAP)")
             clean_reason = clean_reason.replace("Цена ниже VWAP", "Цена ниже справедливой стоимости (VWAP)")
-            clean_reasons.append(f"     {clean_reason}")
+            clean_reasons.append(f"{clean_reason}")
         
         lines.extend(clean_reasons)
         
@@ -10943,7 +10943,7 @@ class MultiExchangeScannerBot:
         
         msg += f"💡 Причины:\n"
         for reason in alert.get('reasons', [])[:8]:
-            msg += f"     {reason}\n"
+            msg += f"{reason}\n"
         
         if is_approach:
             msg += f"\n⚠️ Рекомендация: наблюдать за пробоем ATH"
@@ -10986,7 +10986,7 @@ class MultiExchangeScannerBot:
         
         msg += f"💡 Причины:\n"
         for signal in reversal.get('signals', [])[:6]:
-            msg += f"     {signal}\n"
+            msg += f"{signal}\n"
         
         msg += f"\n⚠️ Предполагаемый разворот в зоне Дискавери"
         
