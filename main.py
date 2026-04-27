@@ -2908,6 +2908,15 @@ class SmartMoneyAnalyzer:
         self.order_blocks = []
         self.fair_value_gaps = []
         
+    def fmt_price(self, p):
+        if p < 0.00001: return f"{p:.8f}".rstrip('0').rstrip('.')
+        elif p < 0.0001: return f"{p:.7f}".rstrip('0').rstrip('.')
+        elif p < 0.001: return f"{p:.6f}".rstrip('0').rstrip('.')
+        elif p < 0.01: return f"{p:.5f}".rstrip('0').rstrip('.')
+        elif p < 0.1: return f"{p:.4f}".rstrip('0').rstrip('.')
+        elif p < 1: return f"{p:.3f}".rstrip('0').rstrip('.')
+        else: return f"{p:.2f}"
+    
     def _is_swing_high(self, df: pd.DataFrame, idx: int, window: int = 5) -> bool:
         """Проверка, является ли свеча локальным максимумом"""
         if idx < window or idx >= len(df) - window:
