@@ -10059,82 +10059,82 @@ class MultiExchangeScannerBot:
                 break
         
         try:
-            logger.info(f"🔍 ПАМП ЗОНЫ: dataframes={dataframes is not None}, keys={list(dataframes.keys()) if dataframes else 'None'}")
-            # ✅ Добавить расчёт зон для обычного пампа
-            if not signal.get('entry_zones') and dataframes:
-                from config import ENTRY_ZONES_GUARANTEED
-                direction = signal.get('direction', '')
-                current_price = signal.get('price', 0)
-                is_long = direction.startswith('LONG')
-                cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-                tf_name = cfg.get('timeframe', '1h')
-                lookback = cfg.get('lookback', 50)
-                max_zones = cfg.get('max_zones', 3)
-                min_dist = cfg.get('min_distance_pct', 0.3) / 100
-                tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
-                tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
-                df_key = tf_map.get(tf_name, 'hourly')
+            # logger.info(f"🔍 ПАМП ЗОНЫ: dataframes={dataframes is not None}, keys={list(dataframes.keys()) if dataframes else 'None'}")
+            # # ✅ Добавить расчёт зон для обычного пампа
+            # if not signal.get('entry_zones') and dataframes:
+            #     from config import ENTRY_ZONES_GUARANTEED
+            #     direction = signal.get('direction', '')
+            #     current_price = signal.get('price', 0)
+            #     is_long = direction.startswith('LONG')
+            #     cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
+            #     tf_name = cfg.get('timeframe', '1h')
+            #     lookback = cfg.get('lookback', 50)
+            #     max_zones = cfg.get('max_zones', 3)
+            #     min_dist = cfg.get('min_distance_pct', 0.3) / 100
+            #     tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
+            #     tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
+            #     df_key = tf_map.get(tf_name, 'hourly')
 
-                df_tf = dataframes.get(df_key)
-                if df_tf is None:
-                    df_key = 'current'
-                    df_tf = dataframes.get(df_key)
+            #     df_tf = dataframes.get(df_key)
+            #     if df_tf is None:
+            #         df_key = 'current'
+            #         df_tf = dataframes.get(df_key)
                 
-                logger.info(f"🔍 ПАМП ЗОНЫ: ищу df_key={df_key}, есть в dataframes={df_key in dataframes}")
+            #     logger.info(f"🔍 ПАМП ЗОНЫ: ищу df_key={df_key}, есть в dataframes={df_key in dataframes}")
 
-                zones = []
-                if df_tf is not None and not df_tf.empty:
-                    lb = min(lookback, len(df_tf))
-                    if is_long:
-                        vals = df_tf['low'].tail(lb)
-                        vals = vals[vals < current_price * (1 - min_dist)]
-                    else:
-                        vals = df_tf['high'].tail(lb)
-                        vals = vals[vals > current_price * (1 + min_dist)]
+            #     zones = []
+            #     if df_tf is not None and not df_tf.empty:
+            #         lb = min(lookback, len(df_tf))
+            #         if is_long:
+            #             vals = df_tf['low'].tail(lb)
+            #             vals = vals[vals < current_price * (1 - min_dist)]
+            #         else:
+            #             vals = df_tf['high'].tail(lb)
+            #             vals = vals[vals > current_price * (1 + min_dist)]
                     
-                    if len(vals) > 0:
-                        sorted_vals = sorted(vals, reverse=is_long)
-                        last_price = None
-                        for price in sorted_vals:
-                            if last_price is None or abs(price - last_price) / max(last_price, 0.00001) > min_dist:
-                                if price < 0.00001: p_str = f"{price:.8f}".rstrip('0').rstrip('.')
-                                elif price < 0.0001: p_str = f"{price:.7f}".rstrip('0').rstrip('.')
-                                elif price < 0.001: p_str = f"{price:.6f}".rstrip('0').rstrip('.')
-                                elif price < 0.01: p_str = f"{price:.5f}".rstrip('0').rstrip('.')
-                                elif price < 0.1: p_str = f"{price:.4f}".rstrip('0').rstrip('.')
-                                elif price < 1: p_str = f"{price:.3f}".rstrip('0').rstrip('.')
-                                else: p_str = f"{price:.2f}"
-                                zones.append(f"{p_str} ({tf_display.get(tf_name, tf_name)})")
-                                last_price = price
-                            if len(zones) >= max_zones:
-                                break
+            #         if len(vals) > 0:
+            #             sorted_vals = sorted(vals, reverse=is_long)
+            #             last_price = None
+            #             for price in sorted_vals:
+            #                 if last_price is None or abs(price - last_price) / max(last_price, 0.00001) > min_dist:
+            #                     if price < 0.00001: p_str = f"{price:.8f}".rstrip('0').rstrip('.')
+            #                     elif price < 0.0001: p_str = f"{price:.7f}".rstrip('0').rstrip('.')
+            #                     elif price < 0.001: p_str = f"{price:.6f}".rstrip('0').rstrip('.')
+            #                     elif price < 0.01: p_str = f"{price:.5f}".rstrip('0').rstrip('.')
+            #                     elif price < 0.1: p_str = f"{price:.4f}".rstrip('0').rstrip('.')
+            #                     elif price < 1: p_str = f"{price:.3f}".rstrip('0').rstrip('.')
+            #                     else: p_str = f"{price:.2f}"
+            #                     zones.append(f"{p_str} ({tf_display.get(tf_name, tf_name)})")
+            #                     last_price = price
+            #                 if len(zones) >= max_zones:
+            #                     break
                 
-                logger.info(f"🔍 ПАМП ЗОНЫ: dataframes keys={list(dataframes.keys())}, tf_key={tf_name}, df_tf={'OK' if df_tf is not None else 'None'}, zones={len(zones)}")
+            #     logger.info(f"🔍 ПАМП ЗОНЫ: dataframes keys={list(dataframes.keys())}, tf_key={tf_name}, df_tf={'OK' if df_tf is not None else 'None'}, zones={len(zones)}")
 
-                # if zones:
-                #     # Добавляем зоны в pump_data['message']
-                #     zones_text = f"🟣 Зоны добора: {' | '.join(zones)}\n"
-                #     # Вставляем перед "💡 Причины:"
-                #     if "💡 Причины:" in pump_data['message']:
-                #         pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n💡 Причины:")
-                #     else:
-                #         pump_data['message'] += f"\n{zones_text}"
-                # if zones:
-                    # zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
-                    # if "💡 Причины:" in pump_data['message']:
-                    #     pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
-                    # elif "📊 Риск/Прибыль:" in pump_data['message']:
-                    #     pump_data['message'] = pump_data['message'].replace("📊 Риск/Прибыль:", f"{zones_text}\n📊 Риск/Прибыль:")
-                    # else:
-                    #     pump_data['message'] += f"\n{zones_text}"
+            #     # if zones:
+            #     #     # Добавляем зоны в pump_data['message']
+            #     #     zones_text = f"🟣 Зоны добора: {' | '.join(zones)}\n"
+            #     #     # Вставляем перед "💡 Причины:"
+            #     #     if "💡 Причины:" in pump_data['message']:
+            #     #         pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n💡 Причины:")
+            #     #     else:
+            #     #         pump_data['message'] += f"\n{zones_text}"
+            #     # if zones:
+            #         # zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
+            #         # if "💡 Причины:" in pump_data['message']:
+            #         #     pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
+            #         # elif "📊 Риск/Прибыль:" in pump_data['message']:
+            #         #     pump_data['message'] = pump_data['message'].replace("📊 Риск/Прибыль:", f"{zones_text}\n📊 Риск/Прибыль:")
+            #         # else:
+            #         #     pump_data['message'] += f"\n{zones_text}"
 
-                if zones:
-                    zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
-                    # Вставляем перед "💡 Причины:"
-                    if "💡 Причины:" in pump_data['message']:
-                        pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
-                    else:
-                        pump_data['message'] += f"\n{zones_text}"
+            #     if zones:
+            #         zones_text = f"🟣 Зоны добора: {' | '.join(zones)}"
+            #         # Вставляем перед "💡 Причины:"
+            #         if "💡 Причины:" in pump_data['message']:
+            #             pump_data['message'] = pump_data['message'].replace("💡 Причины:", f"{zones_text}\n\n💡 Причины:")
+            #         else:
+            #             pump_data['message'] += f"\n{zones_text}"
 
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
