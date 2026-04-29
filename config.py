@@ -71,7 +71,7 @@ PUMP_SCAN_SETTINGS = {
     'shitcoin_instant_threshold': 7.0,              # Порог % движения для WebSocket (щиткоины) (было 1.5, 0.8) 2.0
     'timeframes': ['1m', '3m', '5m', '15m', '30m'], # Было ['1m', '3m', '5m']
     'min_volume_usdt': 1000,                        # Включает монеты с объемом от 1000 USDT (очень низкий порог → почти все монеты)
-    'max_pairs_to_scan': 600,                       # Было 600
+    'max_pairs_to_scan': 1000,                       # Было 600
     'include_low_liquidity': True,
     'send_top_pumps': 999,
     'cooldown_minutes': 15,                         # Было 5
@@ -160,7 +160,7 @@ WEBSOCKET_ANALYSIS_SETTINGS = {
 # ============== НАСТРОЙКИ СКАНИРОВАНИЯ ПАР ==============
 
 SCAN_MODE = {
-    'mode': 'hybrid',  # 'all', 'top_volume', 'shitcoin', 'hybrid'
+    'mode': 'all',  # 'all', 'top_volume', 'shitcoin', 'hybrid'
         # Как переключать режимы:
         # Только щиткоины (сейчас):         'mode': 'shitcoin'      
         # Только топ-100 по объему:         'mode': 'top_volume'
