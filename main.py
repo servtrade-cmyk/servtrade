@@ -8555,6 +8555,8 @@ class FastPumpScanner:
 
         logger.info(f"  📊 format_pump_message START: направление до изменений = {signal.get('direction')}")
 
+        logger.info(f"🔍 format_pump_message: dataframes={'OK' if dataframes else 'None'}, entry_zones={signal.get('entry_zones')}")
+
         coin = signal['symbol'].split('/')[0].replace('USDT', '')
         
         # Получаем данные о пампа
