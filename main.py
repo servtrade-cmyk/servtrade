@@ -9430,6 +9430,8 @@ class MultiExchangeScannerBot:
     def format_message(self, signal: Dict, contract_info: Dict = None, pump_percent: float = None, df: pd.DataFrame = None, dataframes: Dict = None) -> Tuple[str, InlineKeyboardMarkup]:
         """Форматирование сигнала с новым форматом"""
         
+        logger.info(f"🔍 format_message: dataframes={'OK' if dataframes else 'None'}, entry_zones={signal.get('entry_zones')}")
+
         from config import RISK_MANAGEMENT_SETTINGS
         
         # Определяем эмодзи
