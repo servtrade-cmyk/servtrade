@@ -8926,6 +8926,8 @@ class FastPumpScanner:
                 start_idx = max(0, end_idx - lookback)
                 df_window = df_tf.iloc[start_idx:end_idx]
                 
+                logger.info(f"🔍 ЗОНЫ: is_long={is_long}, df_tf_len={len(df_tf)}, end_idx={end_idx}, start_idx={start_idx}, window_len={len(df_window)}")
+                
                 if len(df_window) > 0:
                     if is_long:
                         vals = df_window['low']
