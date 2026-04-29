@@ -9039,7 +9039,8 @@ class FastPumpScanner:
         if rr_ratio > 0:
             lines.append(f"📊 Риск/Прибыль: 1:{rr_ratio:.0f}")
         
-        lines.extend([line10, line11])
+        # lines.extend([line10, line11])
+        lines.extend(["", "💡 Причины:"])
         lines.extend(reasons_lines)
 
         message = "\n".join(lines)
