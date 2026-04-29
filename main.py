@@ -8927,7 +8927,7 @@ class FastPumpScanner:
                 df_window = df_tf.iloc[start_idx:end_idx]
                 
                 logger.info(f"🔍 ЗОНЫ: is_long={is_long}, df_tf_len={len(df_tf)}, end_idx={end_idx}, start_idx={start_idx}, window_len={len(df_window)}")
-                
+
                 if len(df_window) > 0:
                     if is_long:
                         vals = df_window['low']
@@ -9235,7 +9235,13 @@ class MultiExchangeScannerBot:
         for fetcher in self.fetchers.values():
             if fetcher.name == 'BingX':
                 for tf_name, tf_value in TIMEFRAMES.items():
-                    limit = 100 if tf_name == 'current' else 50
+                    # limit = 100 if tf_name == 'current' else 50
+                    if tf_name == 'daily':
+                        limit = 1000
+                    elif tf_name == 'current':
+                        limit = 200
+                    else:
+                        limit = 100
                     df = await fetcher.fetch_ohlcv(symbol, tf_value, limit)
                     if df is not None and not df.empty:
                         df = self.analyzer.calculate_indicators(df)
@@ -9247,7 +9253,13 @@ class MultiExchangeScannerBot:
         """Загрузка всех таймфреймов для символа"""
         dataframes = {}
         for tf_name, tf_value in TIMEFRAMES.items():
-            limit = 200 if tf_name == 'current' else 50
+            # limit = 200 if tf_name == 'current' else 50
+            if tf_name == 'daily':
+                limit = 1000  # ~4 года истории для ATH/ATL
+            elif tf_name == 'current':
+                limit = 200
+            else:
+                limit = 100
             df = await fetcher.fetch_ohlcv(symbol, tf_value, limit)
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
