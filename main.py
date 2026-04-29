@@ -8952,21 +8952,22 @@ class FastPumpScanner:
             
             entry_zones = zones
 
-        if entry_zones:
-            lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
+        # if entry_zones:
+        #     lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
+
+        # # # Risk/Reward
+        # # if signal.get('rr_ratio', 0) > 0 or (risk_pct > 0 and reward_pct > 0):
+        # #     rr = signal.get('rr_ratio', 0) or reward_pct / risk_pct if risk_pct > 0 else 0
+        # #     if rr > 0:
+        # #         line9 += f"\n📊 Риск/Прибыль: 1:{rr:.0f}"
 
         # # Risk/Reward
-        # if signal.get('rr_ratio', 0) > 0 or (risk_pct > 0 and reward_pct > 0):
-        #     rr = signal.get('rr_ratio', 0) or reward_pct / risk_pct if risk_pct > 0 else 0
-        #     if rr > 0:
-        #         line9 += f"\n📊 Риск/Прибыль: 1:{rr:.0f}"
-        # Risk/Reward
-        rr_ratio = signal.get('rr_ratio', 0)
-        if rr_ratio > 0:
-            lines.append(f"📊 Риск/Прибыль: 1:{rr_ratio:.0f}")
+        # rr_ratio = signal.get('rr_ratio', 0)
+        # if rr_ratio > 0:
+        #     lines.append(f"📊 Риск/Прибыль: 1:{rr_ratio:.0f}")
 
-        line10 = ""
-        line11 = "💡 Причины:"
+        # line10 = ""
+        # line11 = "💡 Причины:"
         
         # Очистка причин от эмодзи
         clean_reasons = []
@@ -9016,13 +9017,31 @@ class FastPumpScanner:
         
         reasons_lines = [f"{r}" for r in filtered_reasons[:8]]
 
+        # # Собираем сообщение
+        # lines = [line1, line2, line3, line4, line5, line6]
+        # if line8:
+        #     lines.append(line8)
+
+        # lines.extend([line9, line10, line11])
+        # lines.extend(reasons_lines)
+        
         # Собираем сообщение
         lines = [line1, line2, line3, line4, line5, line6]
         if line8:
             lines.append(line8)
-        lines.extend([line9, line10, line11])
-        lines.extend(reasons_lines)
+        lines.extend([line9])
         
+        # ✅ Зоны и Risk/Reward здесь
+        if entry_zones:
+            lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
+        
+        rr_ratio = signal.get('rr_ratio', 0)
+        if rr_ratio > 0:
+            lines.append(f"📊 Риск/Прибыль: 1:{rr_ratio:.0f}")
+        
+        lines.extend([line10, line11])
+        lines.extend(reasons_lines)
+
         message = "\n".join(lines)
         
         # Кнопки
