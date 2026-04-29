@@ -9888,7 +9888,13 @@ class MultiExchangeScannerBot:
                 contract_info = await fetcher.fetch_contract_info(signal['symbol'])
                 if 'funding_rate' not in signal:
                     signal['funding_rate'] = await fetcher.fetch_funding_rate(signal['symbol'])
-                msg, keyboard = scanner.format_pump_message(signal, contract_info, dataframes=None)
+                
+                # Загружаем dataframes для зон добора
+                dataframes = None
+                if not signal.get('entry_zones'):
+                    dataframes = await self._load_dataframes_for_signal(signal['symbol'])
+                
+                msg, keyboard = scanner.format_pump_message(signal, contract_info, dataframes=dataframes)
                 pump_signals.append({
                     'signal': signal,
                     'message': msg,
