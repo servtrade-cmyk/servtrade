@@ -10045,11 +10045,18 @@ class MultiExchangeScannerBot:
         
         from config import RISK_MANAGEMENT_SETTINGS
 
-        # ✅ Если dataframes не переданы — создаём пустой словарь
-        if dataframes is None:
-            dataframes = {}
-            #logger.warning(f"⚠️ dataframes не переданы в send_pump_signal для {coin}")
+        # # ✅ Если dataframes не переданы — создаём пустой словарь
+        # if dataframes is None:
+        #     dataframes = {}
+        #     #logger.warning(f"⚠️ dataframes не переданы в send_pump_signal для {coin}")
 
+        # if not dataframes:
+        #     for fetcher in self.fetchers.values():
+        #         if fetcher.name == signal.get('exchange', 'BingX'):
+        #             dataframes = await self._load_dataframes_for_symbol(fetcher, signal['symbol'])
+        #             break
+
+        # ✅ Загружаем dataframes если не переданы
         if not dataframes:
             for fetcher in self.fetchers.values():
                 if fetcher.name == signal.get('exchange', 'BingX'):
