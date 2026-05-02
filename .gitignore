@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+.ruff_cache/
+.mypy_cache/
+.tox/
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets and runtime data
+.env
+.env.*
+!.env.example
+*.log
+
+# Backtest cache and results
+backtest/cache/
+backtest/results/
+data/cache/
+*.parquet
+signals_database.json
