@@ -307,9 +307,12 @@ def run_backtest(
 
     # Build per-bar equity curve using last-known equity (forward fill).
     if equity_points:
-        # Deduplicate by timestamp keeping the last value.
+        # Deduplicate by timestamp keeping the last value, then sort —
+        # trades may close out of start order if they have different
+        # durations, which produces a non-monotonic index otherwise.
         eq_ts, eq_val = zip(*equity_points, strict=True)
         raw = pd.Series(eq_val, index=pd.DatetimeIndex(eq_ts), name="equity")
+        raw = raw.sort_index()
         raw = raw[~raw.index.duplicated(keep="last")]
         # Reindex to all bars and forward fill.
         equity_curve = raw.reindex(bars.index, method="ffill").ffill()

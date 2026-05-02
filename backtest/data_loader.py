@@ -145,16 +145,25 @@ def _fetch_via_ccxt(
     tf_ms = _timeframe_ms(timeframe)
     cursor = since_ms
     all_rows: list[list[float]] = []
+    last_seen_ts: int | None = None
+    now_ms = int(time.time() * 1000)
     while True:
         rows = ex.fetch_ohlcv(symbol, timeframe, since=cursor, limit=limit)
         if not rows:
             break
-        all_rows.extend(rows)
+        # Stop if the exchange returned the same final timestamp as the
+        # previous page — that means we're at the head of available data.
         last_ts = rows[-1][0]
+        if last_seen_ts is not None and last_ts <= last_seen_ts:
+            all_rows.extend(rows)
+            break
+        all_rows.extend(rows)
+        last_seen_ts = last_ts
         cursor = last_ts + tf_ms
         if until_ms is not None and last_ts >= until_ms:
             break
-        if len(rows) < limit:
+        # Stop when we've caught up to the present (no future bars).
+        if cursor >= now_ms:
             break
         # Respect rate limit.
         time.sleep(getattr(ex, "rateLimit", 200) / 1000.0)

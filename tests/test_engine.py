@@ -314,6 +314,55 @@ def test_signal_with_no_future_bars_skipped():
     assert result.skipped_signals == 1
 
 
+def test_equity_curve_handles_out_of_order_exits():
+    """Regression: signals may start in order but close out of order when
+    they have different durations. The equity index must still be sorted
+    before reindex(method='ffill') is called."""
+    # 30 flat bars then a long up move then back down.
+    n = 30
+    closes = np.concatenate(
+        [
+            np.full(15, 100.0),
+            np.linspace(100.0, 115.0, 8),
+            np.linspace(115.0, 90.0, 7),
+        ]
+    )
+    bars = _bars(
+        opens=closes,
+        highs=closes + 1,
+        lows=closes - 1,
+        closes=closes,
+    )
+    # Two signals that will close out of start order.
+    s1 = Signal(
+        timestamp=bars.index[0].to_pydatetime(),
+        symbol="A/USDT",  # long-running trade
+        direction="LONG",
+        entry_price=100.0,
+        stop_loss=85.0,
+        target_1=130.0,  # never hit -> closes at end via timeout
+    )
+    s2 = Signal(
+        timestamp=bars.index[5].to_pydatetime(),
+        symbol="B/USDT",
+        direction="LONG",
+        entry_price=100.0,
+        stop_loss=99.0,  # tight stop, will close fast
+        target_1=200.0,
+    )
+    cfg = BacktestConfig(
+        initial_capital=10_000,
+        risk_per_trade=0.01,
+        taker_fee_bps=0,
+        slippage_bps=0,
+        bars_to_expiry=None,
+    )
+    result = run_backtest(bars, [s1, s2], cfg)
+    # Equity curve must have one value per bar and a monotonic index.
+    assert len(result.equity_curve) == len(bars)
+    assert result.equity_curve.index.is_monotonic_increasing
+
+
 def test_equity_curve_is_per_bar():
     bars = _bars(
         opens=[100, 100, 105, 105, 100, 100],
