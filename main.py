@@ -10987,37 +10987,71 @@ class MultiExchangeScannerBot:
     
     async def stats_updater_loop(self):
         while True:
-            await asyncio.sleep(STATS_SETTINGS['update_interval'])
-            
-            if not hasattr(self, 'stats'):
-                continue
-            
-            # ✅ Создаём копию списка ключей (чтобы избежать ошибки)
-            for signal_id in list(self.stats.db['signals'].keys()):
-                signal_data = self.stats.db['signals'].get(signal_id)
-                if not signal_data or signal_data['status'] != 'pending':
+            try:
+                await asyncio.sleep(STATS_SETTINGS['update_interval'])
+
+                if not hasattr(self, 'stats'):
                     continue
-                
-                for fetcher in self.fetchers.values():
-                    ticker = await fetcher.fetch_ticker(signal_data['symbol'])
-                    if ticker and ticker.get('last'):
-                        self.stats.update_signal(signal_id, ticker['last'])
-                        break
-    
+
+                # ✅ Создаём копию списка ключей (чтобы избежать ошибки)
+                for signal_id in list(self.stats.db['signals'].keys()):
+                    try:
+                        signal_data = self.stats.db['signals'].get(signal_id)
+                        if not signal_data or signal_data['status'] != 'pending':
+                            continue
+
+                        for fetcher in self.fetchers.values():
+                            try:
+                                ticker = await fetcher.fetch_ticker(signal_data['symbol'])
+                            except Exception:
+                                logger.error(
+                                    f"fetch_ticker упал для {signal_data['symbol']} на {fetcher}",
+                                    exc_info=True,
+                                )
+                                continue
+                            if ticker and ticker.get('last'):
+                                await self.stats.update_signal(signal_id, ticker['last'])
+                                break
+                    except Exception:
+                        logger.error(
+                            f"stats_updater_loop: ошибка на сигнале {signal_id}",
+                            exc_info=True,
+                        )
+                        if hasattr(self, 'stats'):
+                            self.stats.last_error = f"updater[{signal_id}]"
+                        continue
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.error("stats_updater_loop крашнулся, перезапуск через 30с", exc_info=True)
+                if hasattr(self, 'stats'):
+                    self.stats.last_error = "updater_loop crashed"
+                await asyncio.sleep(30)
+
     async def daily_report_loop(self):
         while True:
-            now = datetime.now()
-            target_time = datetime.strptime(STATS_SETTINGS['daily_report_time'], '%H:%M').time()
-            target = datetime.combine(now.date(), target_time)
-            
-            if now > target:
-                target += timedelta(days=1)
-            
-            wait_seconds = (target - now).total_seconds()
-            await asyncio.sleep(wait_seconds)
-            
-            if hasattr(self, 'stats'):
-                await self.stats.send_daily_report()
+            try:
+                now = datetime.now()
+                target_time = datetime.strptime(STATS_SETTINGS['daily_report_time'], '%H:%M').time()
+                target = datetime.combine(now.date(), target_time)
+
+                if now > target:
+                    target += timedelta(days=1)
+
+                wait_seconds = (target - now).total_seconds()
+                await asyncio.sleep(wait_seconds)
+
+                if hasattr(self, 'stats'):
+                    try:
+                        await self.stats.send_daily_report()
+                    except Exception:
+                        logger.error("send_daily_report упал", exc_info=True)
+                        self.stats.last_error = "daily_report failed"
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.error("daily_report_loop крашнулся, перезапуск через 60с", exc_info=True)
+                await asyncio.sleep(60)
     
     async def run(self):
         logger.info("🤖 Мульти-биржевой бот запущен")
@@ -11177,6 +11211,7 @@ class TelegramHandler:
         self.app.add_handler(CommandHandler("help", self.help))
         self.app.add_handler(CommandHandler("stats", self.stats_command))
         self.app.add_handler(CommandHandler("groups", self.groups_command))
+        self.app.add_handler(CommandHandler("health", self.health_command))
         self.app.add_handler(CallbackQueryHandler(self.button))
         self.app.add_handler(CallbackQueryHandler(self.stats_button_handler, pattern="^stats_"))
     
@@ -11247,6 +11282,50 @@ class TelegramHandler:
             parse_mode='Markdown'
         )
     
+    async def health_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        chat_id = str(update.effective_chat.id)
+        if chat_id != STATS_SETTINGS['stats_chat_id']:
+            await update.message.reply_text(
+                "❌ Эта команда доступна только в группе статистики"
+            )
+            return
+
+        if not hasattr(self.bot, 'stats'):
+            await update.message.reply_text(
+                "❌ Статистика не инициализирована (STATS_CHAT_ID пустой на старте бота)."
+            )
+            return
+
+        try:
+            summary = self.bot.stats.get_health_summary()
+        except Exception as e:
+            logger.error("health_command: get_health_summary упало", exc_info=True)
+            await update.message.reply_text(f"❌ Ошибка: {e}")
+            return
+
+        try:
+            await self.bot.telegram_bot.get_chat(summary['stats_chat_id'])
+            chat_check = "✅ доступный"
+        except Exception as e:
+            chat_check = f"❌ {e}"
+
+        sc = summary['status_counts']
+        msg = (
+            "🩺 *Статистика — диагностика*\n\n"
+            f"• Файл БД: `{summary['db_file']}`\n"
+            f"• Размер БД: {summary['db_size_bytes']} байт\n"
+            f"• Всего сигналов: {summary['total_signals']}\n"
+            f"• pending: {sc.get('pending', 0)}\n"
+            f"• victory: {sc.get('victory', 0)}\n"
+            f"• profit: {sc.get('profit', 0)}\n"
+            f"• loss: {sc.get('loss', 0)}\n"
+            f"• Последний сигнал: {summary['last_signal_created_at'] or '—'}\n"
+            f"• STATS\\_CHAT\\_ID: `{summary['stats_chat_id']}`\n"
+            f"• Доступ к чату: {chat_check}\n"
+            f"• Последняя ошибка: {summary['last_error'] or '—'}\n"
+        )
+        await update.message.reply_text(msg, parse_mode='Markdown')
+
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"📢 Команда /stats была вызвана в чате с ID: {update.effective_chat.id}")
         logger.info(f"📊 stats_command вызвана, chat_id={update.effective_chat.id}")

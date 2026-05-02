@@ -18,7 +18,10 @@ STATS_SETTINGS = {
     'daily_report_time': '20:00',
     'update_interval': 300,
     'history_days': 90,
-    'db_file': '/tmp/signals_database.json'  # Используем /tmp в Railway. Было 'db_file': 'signals_database.json'    
+    # На Railway /tmp обнуляется при каждом redeploy. Если у вас подключён
+    # persistent volume — задайте STATS_DB_PATH=/data/signals_database.json
+    # в переменных окружения.
+    'db_file': os.getenv('STATS_DB_PATH', '/tmp/signals_database.json'),
 }
 
 class SignalStatistics:
@@ -26,6 +29,7 @@ class SignalStatistics:
         self.bot = bot
         self.stats_chat_id = stats_chat_id
         self.db_file = STATS_SETTINGS['db_file']
+        self.last_error: Optional[str] = None
         self.load_database()
     
     def load_database(self):
@@ -53,64 +57,84 @@ class SignalStatistics:
         except Exception as e:
             logger.error(f"Ошибка сохранения базы: {e}")
     
-    def add_signal(self, signal: Dict, signal_type: str = 'regular') -> str:
-        logger.info(f"🔥🔥🔥 add_signal ВЫЗВАН для {signal['symbol']} тип={signal_type}")
-        logger.info(f"   STATS_CHAT_ID={self.stats_chat_id}")
-        logger.info(f"   сигнал: {signal.get('direction')}, цена={signal.get('price')}")
+    def add_signal(self, signal: Dict, signal_type: str = 'regular') -> Optional[str]:
+        try:
+            symbol = signal.get('symbol')
+            if not symbol:
+                logger.error(f"add_signal вызван без symbol: {signal!r}")
+                return None
 
-        signal_id = f"{signal['symbol']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        logger.info(f"   signal_id={signal_id}")
-        
-        self.cleanup_old_signals()
-        
-        self.db['signals'][signal_id] = {
-            'id': signal_id,
-            'type': signal_type,
-            'symbol': signal['symbol'],
-            'coin': signal['symbol'].split('/')[0],
-            'direction': signal['direction'],
-            'entry_price': signal['price'],
-            'target_1': signal.get('target_1'),
-            'target_2': signal.get('target_2'),
-            'stop_loss': signal.get('stop_loss'),
-            'signal_power': signal['signal_power'],
-            'signal_strength': signal.get('signal_strength', 0),
-            'reasons': signal['reasons'][:3],
-            'status': 'pending',
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat(),
-            'max_price': signal['price'],
-            'min_price': signal['price'],
-            'final_result': None,
-            'profit_percent': 0
-        }
-        
-        self.db['statistics']['total_signals'] += 1
-        self.db['statistics']['by_type'][signal_type] = self.db['statistics']['by_type'].get(signal_type, 0) + 1
-        
-        if signal_type == 'discovery':
-            self.db['statistics']['by_type']['discovery'] = self.db['statistics']['by_type'].get('discovery', 0) + 1
+            entry_price = signal.get('entry_price') or signal.get('price')
+            if entry_price is None:
+                logger.error(f"add_signal: нет entry_price/price для {symbol}: {signal!r}")
+                return None
 
-        if signal_type == 'vip_pump':
-            self.db['statistics']['by_type']['vip_pump'] = self.db['statistics']['by_type'].get('vip_pump', 0) + 1
+            logger.info(f"🔥🔥🔥 add_signal ВЫЗВАН для {symbol} тип={signal_type}")
+            logger.info(f"   STATS_CHAT_ID={self.stats_chat_id}")
+            logger.info(f"   сигнал: {signal.get('direction')}, цена={entry_price}")
 
-        self.save_database()
-        logger.info(f"✅ Сигнал {signal_id} сохранен в БД")
-        return signal_id
-    
-    def update_signal(self, signal_id: str, current_price: float):
+            signal_id = f"{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            logger.info(f"   signal_id={signal_id}")
+
+            self.cleanup_old_signals()
+
+            reasons = signal.get('reasons') or []
+            if not isinstance(reasons, list):
+                reasons = [str(reasons)]
+
+            self.db['signals'][signal_id] = {
+                'id': signal_id,
+                'type': signal_type,
+                'symbol': symbol,
+                'coin': symbol.split('/')[0],
+                'direction': signal.get('direction', ''),
+                'entry_price': entry_price,
+                'target_1': signal.get('target_1'),
+                'target_2': signal.get('target_2'),
+                'stop_loss': signal.get('stop_loss'),
+                'signal_power': signal.get('signal_power', ''),
+                'signal_strength': signal.get('signal_strength', 0),
+                'reasons': list(reasons)[:3],
+                'status': 'pending',
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat(),
+                'max_price': entry_price,
+                'min_price': entry_price,
+                'final_result': None,
+                'profit_percent': 0,
+            }
+
+            self.db['statistics']['total_signals'] += 1
+            self.db['statistics']['by_type'][signal_type] = self.db['statistics']['by_type'].get(signal_type, 0) + 1
+
+            if signal_type == 'discovery':
+                self.db['statistics']['by_type']['discovery'] = self.db['statistics']['by_type'].get('discovery', 0) + 1
+
+            if signal_type == 'vip_pump':
+                self.db['statistics']['by_type']['vip_pump'] = self.db['statistics']['by_type'].get('vip_pump', 0) + 1
+
+            self.save_database()
+            logger.info(f"✅ Сигнал {signal_id} сохранен в БД")
+            return signal_id
+        except Exception as e:
+            self.last_error = f"add_signal: {e!r}"
+            logger.error(f"add_signal упал для {signal!r}", exc_info=True)
+            return None
+
+    async def update_signal(self, signal_id: str, current_price: float):
         if signal_id not in self.db['signals']:
             return
-        
+
         signal = self.db['signals'][signal_id]
         if signal['status'] != 'pending':
             return
-        
+
+        prev_status = signal['status']
         signal['max_price'] = max(signal['max_price'], current_price)
         signal['min_price'] = min(signal['min_price'], current_price)
-        
+
         profit_pct = 0
-        
+
         # Определяем направление (LONG или SHORT)
         is_long = 'LONG' in signal['direction'] and 'SHORT' not in signal['direction']
         
@@ -145,9 +169,17 @@ class SignalStatistics:
         
         signal['profit_percent'] = round(profit_pct, 2)
         signal['updated_at'] = datetime.now().isoformat()
-        
+
         self.save_database()
-    
+
+        # Сигнал перешёл из pending в финальный статус — отправляем уведомление.
+        if signal['status'] != prev_status and signal['status'] in ('victory', 'profit', 'loss'):
+            try:
+                await self.send_result_notification(signal_id)
+            except Exception as e:
+                self.last_error = f"send_result_notification: {e!r}"
+                logger.error(f"send_result_notification упал для {signal_id}", exc_info=True)
+
     def cleanup_old_signals(self):
         cutoff = datetime.now() - timedelta(days=STATS_SETTINGS['history_days'])
         to_delete = []
@@ -309,30 +341,60 @@ class SignalStatistics:
     
     async def send_result_notification(self, signal_id: str):
         logger.info(f"📤 ОТПРАВКА УВЕДОМЛЕНИЯ для {signal_id}")
-        signal = self.db['signals'][signal_id]
-        
+        signal = self.db['signals'].get(signal_id)
+        if not signal:
+            return
+        if not self.stats_chat_id:
+            return
+
         emoji = {
             'victory': '🏆',
             'profit': '💰',
-            'loss': '❌'
+            'loss': '❌',
         }.get(signal['status'], '🔄')
-        
+
+        type_label = {
+            'pump': '🚀 Памп',
+            'vip_pump': '👑 VIP Памп',
+            'accumulation': '📦 Накопление',
+            'discovery': '🔍 Дискавери',
+        }.get(signal['type'], '📊 Обычный')
+
         msg = f"{emoji} *Сигнал завершен*\n\n"
         msg += f"Монета: `{signal['coin']}`\n"
-        msg += f"Тип: "
-        if signal['type'] == 'pump':
-            msg += f"🚀 Памп\n"
-        elif signal['type'] == 'accumulation':
-            msg += f"📦 Накопление\n"
-        else:
-            msg += f"📊 Обычный\n"
+        msg += f"Тип: {type_label}\n"
         msg += f"Направление: {signal['direction']}\n"
         msg += f"Вход: {signal['entry_price']}\n"
         msg += f"Результат: {signal['final_result']}\n"
         msg += f"Прибыль: {signal['profit_percent']:+.2f}%\n"
-        
+
         await self.bot.send_message(
             chat_id=self.stats_chat_id,
             text=msg,
-            parse_mode='HTML'
+            parse_mode='Markdown',
         )
+
+    def get_health_summary(self) -> Dict:
+        signals = self.db.get('signals', {})
+        statuses: Dict[str, int] = defaultdict(int)
+        last_created: Optional[str] = None
+        for sig in signals.values():
+            statuses[sig.get('status', 'unknown')] += 1
+            created = sig.get('created_at')
+            if created and (last_created is None or created > last_created):
+                last_created = created
+
+        try:
+            db_size = os.path.getsize(self.db_file) if os.path.exists(self.db_file) else 0
+        except OSError:
+            db_size = -1
+
+        return {
+            'db_file': self.db_file,
+            'db_size_bytes': db_size,
+            'stats_chat_id': self.stats_chat_id,
+            'total_signals': len(signals),
+            'status_counts': dict(statuses),
+            'last_signal_created_at': last_created,
+            'last_error': self.last_error,
+        }
