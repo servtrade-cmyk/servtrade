@@ -11600,9 +11600,15 @@ class TelegramHandler:
         # работают одновременно — библиотека автоматически переподключается).
         class _ConflictFilter(logging.Filter):
             def filter(self, record: logging.LogRecord) -> bool:
-                return "Conflict" not in record.getMessage()
+                if "Conflict" in record.getMessage():
+                    return False
+                if record.exc_info and record.exc_info[1]:
+                    if "Conflict" in str(record.exc_info[1]):
+                        return False
+                return True
 
-        logging.getLogger("telegram.ext.Updater").addFilter(_ConflictFilter())
+        for name in ("telegram.ext.Updater", "telegram.ext._utils.networkloop"):
+            logging.getLogger(name).addFilter(_ConflictFilter())
 
         await self.app.initialize()
         await self.app.updater.start_polling(drop_pending_updates=True)
