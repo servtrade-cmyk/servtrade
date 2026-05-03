@@ -277,6 +277,154 @@ def _cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_analyze(args: argparse.Namespace) -> int:
+    db_path = Path(args.db)
+    if not db_path.exists():
+        print(f"File not found: {db_path}", file=sys.stderr)
+        return 1
+
+    with db_path.open("r", encoding="utf-8") as f:
+        db = json.load(f)
+
+    raw = db.get("signals", {}) if isinstance(db, dict) else {}
+    if not raw:
+        print("No signals in database.", file=sys.stderr)
+        return 1
+
+    signals = list(raw.values())
+    closed = [s for s in signals if s.get("status") in ("victory", "profit", "loss")]
+    pending = [s for s in signals if s.get("status") == "pending"]
+
+    print(f"\n{'='*60}")
+    print(f"  АНАЛИЗ СИГНАЛОВ: {db_path.name}")
+    print(f"{'='*60}")
+    print(f"  Всего сигналов: {len(signals)}")
+    print(f"  Закрытых: {len(closed)}  |  Ожидающих: {len(pending)}")
+    print(f"{'='*60}")
+
+    if not closed:
+        print("\nНет закрытых сигналов для анализа.")
+        return 0
+
+    def _analyze_group(name: str, group: list[dict]) -> None:
+        if not group:
+            return
+        wins = [s for s in group if s["status"] in ("victory", "profit")]
+        losses = [s for s in group if s["status"] == "loss"]
+        profits = [s.get("profit_percent", 0) for s in group]
+        win_profits = [s.get("profit_percent", 0) for s in wins]
+        loss_profits = [abs(s.get("profit_percent", 0)) for s in losses]
+
+        win_rate = len(wins) / len(group) * 100
+        avg_profit = sum(profits) / len(profits)
+        total_profit = sum(profits)
+        avg_win = sum(win_profits) / len(win_profits) if win_profits else 0
+        avg_loss = sum(loss_profits) / len(loss_profits) if loss_profits else 0
+        gross_win = sum(win_profits)
+        gross_loss = sum(loss_profits)
+        pf = gross_win / gross_loss if gross_loss > 0 else float("inf")
+
+        victories = len([s for s in group if s["status"] == "victory"])
+        tp1_hits = len([s for s in group if s["status"] == "profit"])
+
+        print(f"\n  {name}")
+        print(f"  {'─'*50}")
+        print(f"  Сделок:       {len(group):>6}  "
+              f"(🏆{victories} 💰{tp1_hits} ❌{len(losses)})")
+        print(f"  Win Rate:     {win_rate:>6.1f}%")
+        print(f"  Ср. прибыль:  {avg_profit:>+6.2f}%")
+        print(f"  Сумм. прибыль:{total_profit:>+7.2f}%")
+        print(f"  Ср. выигрыш:  {avg_win:>+6.2f}%  |  Ср. проигрыш: {avg_loss:>6.2f}%")
+        print(f"  Profit Factor:{pf:>7.2f}")
+
+    # 1. Overall
+    _analyze_group("📊 ОБЩАЯ СТАТИСТИКА", closed)
+
+    # 2. By signal type
+    types = sorted(set(s.get("type", "unknown") for s in closed))
+    if len(types) > 1:
+        print(f"\n{'─'*60}")
+        print("  📋 ПО ТИПУ СИГНАЛА")
+        for t in types:
+            group = [s for s in closed if s.get("type") == t]
+            type_labels = {
+                "pump": "🚀 Памп",
+                "vip_pump": "👑 VIP Памп",
+                "accumulation": "📦 Накопление",
+                "discovery": "🔍 Дискавери",
+                "regular": "📊 Обычный",
+            }
+            _analyze_group(type_labels.get(t, t), group)
+
+    # 3. By direction
+    directions = sorted(set(s.get("direction", "?") for s in closed))
+    if len(directions) > 1:
+        print(f"\n{'─'*60}")
+        print("  📋 ПО НАПРАВЛЕНИЮ")
+        for d in directions:
+            group = [s for s in closed if s.get("direction") == d]
+            _analyze_group(f"{'📈' if 'LONG' in d.upper() else '📉'} {d}", group)
+
+    # 4. By coin (top 10 by trade count)
+    coins = {}
+    for s in closed:
+        coin = s.get("coin", "?")
+        coins.setdefault(coin, []).append(s)
+    if len(coins) > 1:
+        top_coins = sorted(coins.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+        print(f"\n{'─'*60}")
+        print("  📋 ТОП-10 МОНЕТ (по количеству сделок)")
+        for coin, group in top_coins:
+            _analyze_group(f"🪙 {coin}", group)
+
+    # 5. By signal strength (buckets)
+    strength_buckets = {"Сильный (7-10)": [], "Средний (4-6)": [], "Слабый (1-3)": []}
+    for s in closed:
+        strength = s.get("signal_strength", 0) or 0
+        if strength >= 7:
+            strength_buckets["Сильный (7-10)"].append(s)
+        elif strength >= 4:
+            strength_buckets["Средний (4-6)"].append(s)
+        else:
+            strength_buckets["Слабый (1-3)"].append(s)
+
+    non_empty_buckets = {k: v for k, v in strength_buckets.items() if v}
+    if len(non_empty_buckets) > 1:
+        print(f"\n{'─'*60}")
+        print("  📋 ПО СИЛЕ СИГНАЛА")
+        for label, group in non_empty_buckets.items():
+            _analyze_group(f"💪 {label}", group)
+
+    # 6. By result type
+    print(f"\n{'─'*60}")
+    print("  📋 ПО РЕЗУЛЬТАТУ")
+    for status, label in [("victory", "🏆 Цель 2 (victory)"),
+                           ("profit", "💰 Цель 1 (profit)"),
+                           ("loss", "❌ Стоп-лосс (loss)")]:
+        group = [s for s in closed if s.get("status") == status]
+        if group:
+            profits = [s.get("profit_percent", 0) for s in group]
+            avg_p = sum(profits) / len(profits)
+            print(f"  {label}: {len(group)} сигналов, ср. {avg_p:+.2f}%")
+
+    # 7. Summary table for output
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        report = {
+            "total_signals": len(signals),
+            "closed_signals": len(closed),
+            "pending_signals": len(pending),
+            "signals": signals,
+        }
+        with out_path.open("w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+        print(f"\nОтчёт сохранён: {out_path}")
+
+    print(f"\n{'='*60}\n")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m backtest",
@@ -326,6 +474,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay.add_argument("--output")
     replay.set_defaults(func=_cmd_replay)
+
+    analyze = sub.add_parser(
+        "analyze",
+        help="Analyze signal outcomes from signals_database.json.",
+    )
+    analyze.add_argument(
+        "--db",
+        default="/tmp/signals_database.json",
+        help="Path to signals_database.json (default: /tmp/signals_database.json).",
+    )
+    analyze.add_argument("--output", help="Path to save JSON report.")
+    analyze.set_defaults(func=_cmd_analyze)
 
     parser.add_argument(
         "-v", "--verbose", action="count", default=0

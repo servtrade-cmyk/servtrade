@@ -159,3 +159,90 @@ def test_cli_replay_command(stub_ccxt, tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "Replay" in out
+
+
+def test_cli_analyze_command(tmp_path, capsys):
+    import json
+
+    db = tmp_path / "signals.json"
+    db.write_text(
+        json.dumps(
+            {
+                "signals": {
+                    "a": {
+                        "type": "pump",
+                        "symbol": "BTC/USDT",
+                        "coin": "BTC",
+                        "direction": "LONG",
+                        "entry_price": 100,
+                        "status": "victory",
+                        "profit_percent": 10.0,
+                        "signal_strength": 8,
+                    },
+                    "b": {
+                        "type": "pump",
+                        "symbol": "ETH/USDT",
+                        "coin": "ETH",
+                        "direction": "SHORT",
+                        "entry_price": 3000,
+                        "status": "loss",
+                        "profit_percent": -5.0,
+                        "signal_strength": 6,
+                    },
+                    "c": {
+                        "type": "regular",
+                        "symbol": "SOL/USDT",
+                        "coin": "SOL",
+                        "direction": "LONG",
+                        "entry_price": 150,
+                        "status": "pending",
+                        "profit_percent": 0,
+                        "signal_strength": 5,
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    out_file = tmp_path / "report.json"
+    rc = cli.main(["analyze", "--db", str(db), "--output", str(out_file)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "АНАЛИЗ СИГНАЛОВ" in out
+    assert "Win Rate" in out
+    assert "Закрытых: 2" in out
+    assert "Ожидающих: 1" in out
+    assert out_file.exists()
+
+
+def test_cli_analyze_empty_db(tmp_path, capsys):
+    import json
+
+    db = tmp_path / "empty.json"
+    db.write_text(json.dumps({"signals": {}}), encoding="utf-8")
+    rc = cli.main(["analyze", "--db", str(db)])
+    assert rc == 1
+
+
+def test_cli_analyze_no_closed(tmp_path, capsys):
+    import json
+
+    db = tmp_path / "pending.json"
+    db.write_text(
+        json.dumps(
+            {
+                "signals": {
+                    "a": {
+                        "type": "pump",
+                        "status": "pending",
+                        "profit_percent": 0,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    rc = cli.main(["analyze", "--db", str(db)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Нет закрытых" in out
