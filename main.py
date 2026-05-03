@@ -11594,20 +11594,35 @@ class TelegramHandler:
                 await query.answer("↩️ Возврат к сигналу")
             return
     
-    def run(self):
-        self.app.run_polling()
+    async def start_polling(self):
+        """Запуск polling в текущем event loop (без создания нового)."""
+        await self.app.initialize()
+        await self.app.updater.start_polling(drop_pending_updates=True)
+        await self.app.start()
+        logger.info("✅ Telegram polling запущен — команды бота активны")
+
+    async def stop_polling(self):
+        """Корректная остановка polling."""
+        try:
+            await self.app.updater.stop()
+            await self.app.stop()
+            await self.app.shutdown()
+            logger.info("🛑 Telegram polling остановлен")
+        except Exception:
+            logger.error("Ошибка при остановке polling", exc_info=True)
 
 # ============== MAIN ==============
 
 async def main():
     bot = MultiExchangeScannerBot()
     handler = TelegramHandler(bot)
-    polling = asyncio.create_task(asyncio.to_thread(handler.run))
-    
+
+    await handler.start_polling()
+
     try:
         await bot.run()
     finally:
-        polling.cancel()
+        await handler.stop_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
