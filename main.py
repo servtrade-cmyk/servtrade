@@ -11596,6 +11596,14 @@ class TelegramHandler:
     
     async def start_polling(self):
         """Запуск polling в текущем event loop (без создания нового)."""
+        # Подавляем Conflict ошибки при деплое (два контейнера кратковременно
+        # работают одновременно — библиотека автоматически переподключается).
+        class _ConflictFilter(logging.Filter):
+            def filter(self, record: logging.LogRecord) -> bool:
+                return "Conflict" not in record.getMessage()
+
+        logging.getLogger("telegram.ext.Updater").addFilter(_ConflictFilter())
+
         await self.app.initialize()
         await self.app.updater.start_polling(drop_pending_updates=True)
         await self.app.start()
