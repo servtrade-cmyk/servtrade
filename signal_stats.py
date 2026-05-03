@@ -360,18 +360,24 @@ class SignalStatistics:
             'discovery': '🔍 Дискавери',
         }.get(signal['type'], '📊 Обычный')
 
-        msg = f"{emoji} *Сигнал завершен*\n\n"
-        msg += f"Монета: `{signal['coin']}`\n"
+        result_label = {
+            'target_2_hit': '🏆 Цель 2',
+            'target_1_hit': '💰 Цель 1',
+            'stop_loss': '❌ Стоп-лосс',
+        }.get(signal.get('final_result') or '', str(signal.get('final_result', '')))
+
+        msg = f"{emoji} <b>Сигнал завершен</b>\n\n"
+        msg += f"Монета: <code>{signal['coin']}</code>\n"
         msg += f"Тип: {type_label}\n"
         msg += f"Направление: {signal['direction']}\n"
         msg += f"Вход: {signal['entry_price']}\n"
-        msg += f"Результат: {signal['final_result']}\n"
+        msg += f"Результат: {result_label}\n"
         msg += f"Прибыль: {signal['profit_percent']:+.2f}%\n"
 
         await self.bot.send_message(
             chat_id=self.stats_chat_id,
             text=msg,
-            parse_mode='Markdown',
+            parse_mode='HTML',
         )
 
     def get_health_summary(self) -> Dict:
