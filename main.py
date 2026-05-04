@@ -7930,6 +7930,10 @@ class FastPumpScanner:
         if not self.websocket_available or not self.ws_manager:
             logger.info("WebSocket мониторинг недоступен, используется REST API")
             return
+
+        if getattr(self, '_ws_monitoring_started', False):
+            return
+        self._ws_monitoring_started = True
         
         # Получаем щиткоины с малым объемом
         shitcoins = await self._get_volatile_shitcoins(symbols)
@@ -9913,13 +9917,17 @@ class MultiExchangeScannerBot:
         
         pump_signals = []
         for name, fetcher in self.fetchers.items():
-            scanner = FastPumpScanner(
-                fetcher, 
-                PUMP_SCAN_SETTINGS, 
-                self.analyzer,
-                self.telegram_bot,
-                self.chart_generator
-            )
+            cache_key = f"_pump_scanner_{name}"
+            scanner = getattr(self, cache_key, None)
+            if scanner is None:
+                scanner = FastPumpScanner(
+                    fetcher, 
+                    PUMP_SCAN_SETTINGS, 
+                    self.analyzer,
+                    self.telegram_bot,
+                    self.chart_generator
+                )
+                setattr(self, cache_key, scanner)
             signals = await scanner.scan_all_pairs()
             
             for signal in signals:

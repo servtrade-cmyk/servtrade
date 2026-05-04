@@ -3,6 +3,7 @@
 
 import json
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import asyncio
@@ -30,6 +31,8 @@ class SignalStatistics:
         self.stats_chat_id = stats_chat_id
         self.db_file = STATS_SETTINGS['db_file']
         self.last_error: Optional[str] = None
+        self._last_save_time: float = 0
+        self._save_min_interval: float = 5.0
         self.load_database()
     
     def load_database(self):
@@ -49,10 +52,14 @@ class SignalStatistics:
             }
             self.save_database()
     
-    def save_database(self):
+    def save_database(self, force: bool = False):
+        now = time.monotonic()
+        if not force and (now - self._last_save_time) < self._save_min_interval:
+            return
         try:
             with open(self.db_file, 'w', encoding='utf-8') as f:
                 json.dump(self.db, f, indent=2, ensure_ascii=False)
+            self._last_save_time = now
             logger.info(f"💾 База данных сохранена ({len(self.db['signals'])} сигналов)")
         except Exception as e:
             logger.error(f"Ошибка сохранения базы: {e}")
@@ -113,7 +120,7 @@ class SignalStatistics:
             if signal_type == 'vip_pump':
                 self.db['statistics']['by_type']['vip_pump'] = self.db['statistics']['by_type'].get('vip_pump', 0) + 1
 
-            self.save_database()
+            self.save_database(force=True)
             logger.info(f"✅ Сигнал {signal_id} сохранен в БД")
             return signal_id
         except Exception as e:
