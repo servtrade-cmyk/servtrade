@@ -8209,7 +8209,7 @@ class FastPumpScanner:
                 
                 # Отправляем подтвержденный сигнал
                 contract_info = await self.fetcher.fetch_contract_info(symbol)
-                msg, keyboard = self.format_pump_message(signal, contract_info)
+                msg, keyboard = self.format_pump_message(signal, contract_info, dataframes=dataframes)
                 
                 # Отправляем подтвержденный сигнал
                 try:
@@ -8449,6 +8449,11 @@ class FastPumpScanner:
                 # Собираем результаты с умной фильтрацией
                 for signal in batch_results:
                     if not signal:
+                        continue
+                    
+                    # Пропускаем, если WebSocket уже отправил сигнал по этому символу
+                    if signal['symbol'] in self.ws_signals_sent:
+                        logger.info(f"⏭️ {signal['symbol']} пропущен (уже отправлен через WebSocket)")
                         continue
                     
                     coin = signal['symbol'].split('/')[0]
