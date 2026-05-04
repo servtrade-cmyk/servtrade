@@ -8296,40 +8296,6 @@ class FastPumpScanner:
                                 
                                 signal['funding_rate'] = funding
                                 
-                                # ✅ ОТПРАВЛЯЕМ СИГНАЛ С ГРАФИКОМ!
-                                try:
-                                    contract_info = await self.fetcher.fetch_contract_info(pair)
-                                    msg, keyboard = self.format_pump_message(signal, contract_info)
-                                    
-                                    # Загружаем данные для графика
-                                    df = await self.fetcher.fetch_ohlcv(pair, TIMEFRAMES.get('current', '15m'), limit=200)
-                                    
-                                    coin = pair.split('/')[0].replace('USDT', '')
-                                    
-                                    if df is not None and not df.empty:
-                                        df = self.analyzer.calculate_indicators(df)
-                                        chart_buf = self.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
-                                        
-                                        await self.telegram_bot.send_photo(
-                                            chat_id=PUMP_CHAT_ID,
-                                            photo=chart_buf,
-                                            caption=msg,
-                                            parse_mode='HTML',
-                                            reply_markup=keyboard
-                                        )
-                                        logger.info(f"✅ Отправлен памп-сигнал с графиком: {pair}")
-                                    else:
-                                        await self.telegram_bot.send_message(
-                                            chat_id=PUMP_CHAT_ID,
-                                            text=msg,
-                                            parse_mode='HTML',
-                                            reply_markup=keyboard
-                                        )
-                                        logger.info(f"✅ Отправлен памп-сигнал (без графика): {pair}")
-                                        
-                                except Exception as e:
-                                    logger.error(f"❌ Ошибка отправки сигнала {pair}: {e}")
-                                
                                 self.cache.set(cache_key, signal)
                                 self.last_pump_signals[signal_key] = datetime.now()
                                 
@@ -9267,7 +9233,7 @@ class MultiExchangeScannerBot:
                         df = self.analyzer.calculate_indicators(df)
                         dataframes[tf_name] = df
                 break
-        return dataframes
+        return dataframes if dataframes else None
 
     async def _load_dataframes_for_symbol(self, fetcher: BaseExchangeFetcher, symbol: str) -> Optional[Dict]:
         """Загрузка всех таймфреймов для символа"""
@@ -9975,13 +9941,6 @@ class MultiExchangeScannerBot:
         
         coin = self.extract_coin(signal['symbol'])
         current_time = datetime.now()
-        
-        # Загружаем dataframes для зон добора
-        dataframes = None
-        for fetcher in self.fetchers.values():
-            if fetcher.name == signal.get('exchange', 'BingX'):
-                dataframes = await self._load_dataframes_for_symbol(fetcher, signal['symbol'])
-                break
 
         # ЗАЩИТА ОТ ДУБЛИРОВАНИЯ
         # ✅ Проверяем, не было ли сигнала по этой монете за последние 5 минут
@@ -10006,7 +9965,7 @@ class MultiExchangeScannerBot:
         
         contract_info = None
         df = None
-        dataframes = None  # ✅
+        dataframes = None
         for fetcher in self.fetchers.values():
             if fetcher.name == signal['exchange']:
                 contract_info = await fetcher.fetch_contract_info(signal['symbol'])
@@ -11569,17 +11528,19 @@ class TelegramHandler:
                 # Получаем актуальные данные
                 contract_info = None
                 df = None
+                dataframes = None
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
                         df = await fetcher.fetch_ohlcv(signal['symbol'], TIMEFRAMES.get('current', '15m'), limit=200)
+                        dataframes = await self.bot._load_dataframes_for_symbol(fetcher, signal['symbol'])
                         break
                 
                 pump_percent = None
                 if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
                     pump_percent = signal['pump_dump'][0].get('change_percent')
                 
-                msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent)
+                msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
                 
                 if df is not None and not df.empty:
                     df = self.bot.analyzer.calculate_indicators(df)
@@ -11627,14 +11588,16 @@ class TelegramHandler:
             if coin in self.bot.last_signals:
                 signal = self.bot.last_signals[coin]['signal']
                 contract_info = None
+                dataframes = None
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
+                        dataframes = await self.bot._load_dataframes_for_symbol(fetcher, signal['symbol'])
                         break
                 pump_percent = None
                 if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
                     pump_percent = signal['pump_dump'][0].get('change_percent')
-                msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent)
+                msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
                 await query.edit_message_text(
                     text=msg,
                     parse_mode='HTML',
