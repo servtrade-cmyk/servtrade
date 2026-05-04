@@ -2645,7 +2645,11 @@ class ChartGenerator:
         """Создание графика с ценой, индикаторами и целями"""
 
         import warnings
+        import re
         warnings.filterwarnings('ignore', category=UserWarning, message='Glyph')
+
+        def strip_emoji(text: str) -> str:
+            return re.sub(r'[\U00010000-\U0010ffff]', '', text).strip()
 
         plt.style.use(self.style)
         
@@ -2749,7 +2753,8 @@ class ChartGenerator:
                         horizontalalignment='right')
         
         # Заголовок
-        ax1.set_title(f'{coin} - {signal["direction"]} (TF: {timeframe}, уверенность {signal["confidence"]}%)', 
+        direction_text = strip_emoji(signal["direction"])
+        ax1.set_title(f'{coin} - {direction_text} (TF: {timeframe}, уверенность {signal["confidence"]}%)', 
                     fontsize=14, fontweight='bold', color='white')
         ax1.set_ylabel('Price (USDT)', color='white')
         ax1.legend(loc='upper left', fontsize=8, facecolor='#222222')
