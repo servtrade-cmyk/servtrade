@@ -57,6 +57,9 @@ class SignalStatistics:
         if not force and (now - self._last_save_time) < self._save_min_interval:
             return
         try:
+            parent = os.path.dirname(self.db_file)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             with open(self.db_file, 'w', encoding='utf-8') as f:
                 json.dump(self.db, f, indent=2, ensure_ascii=False)
             self._last_save_time = now

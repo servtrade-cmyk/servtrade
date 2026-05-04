@@ -66,6 +66,8 @@ class BingXWebSocketManager:
                     except asyncio.TimeoutError:
                         pass
                     
+                    attempts = 0
+                    
                     while self.running:
                         try:
                             message = await asyncio.wait_for(ws.recv(), timeout=60)
@@ -74,18 +76,20 @@ class BingXWebSocketManager:
                             try:
                                 await ws.send(json.dumps({"ping": int(datetime.now().timestamp() * 1000)}))
                             except:
-                                pass
+                                break
                             continue
                         except websockets.exceptions.ConnectionClosed:
-                            logger.warning(f"⚠️ WebSocket {stream_name} соединение закрыто")
                             break
                     
-                    attempts = 0
+                    if self.running:
+                        logger.info(f"🔄 WebSocket {stream_name} переподключение через {self.reconnect_delay}с...")
+                        await asyncio.sleep(self.reconnect_delay)
                     
             except Exception as e:
                 attempts += 1
-                logger.error(f"❌ WebSocket ошибка: {e}, попытка {attempts}")
-                await asyncio.sleep(self.reconnect_delay * attempts)
+                delay = self.reconnect_delay * attempts
+                logger.error(f"❌ WebSocket ошибка: {e}, попытка {attempts}, ожидание {delay}с")
+                await asyncio.sleep(delay)
     
     async def _handle_message(self, message: str, symbols: List[str], callback: Callable):
         try:
