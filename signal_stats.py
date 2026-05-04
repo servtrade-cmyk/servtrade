@@ -65,7 +65,12 @@ class SignalStatistics:
             self._last_save_time = now
             logger.info(f"💾 База данных сохранена ({len(self.db['signals'])} сигналов)")
         except Exception as e:
-            logger.error(f"Ошибка сохранения базы: {e}")
+            if self.db_file != '/tmp/signals_database.json':
+                logger.warning(f"⚠️ Не удалось сохранить в {self.db_file}: {e}, переключаюсь на /tmp/")
+                self.db_file = '/tmp/signals_database.json'
+                self.save_database(force=True)
+            else:
+                logger.error(f"Ошибка сохранения базы: {e}")
     
     def add_signal(self, signal: Dict, signal_type: str = 'regular') -> Optional[str]:
         try:
