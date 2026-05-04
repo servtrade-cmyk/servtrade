@@ -82,7 +82,7 @@ PUMP_SCAN_SETTINGS = {
         # self.delay_between_batches = PUMP_SCAN_SETTINGS.get('delay_between_batches', 0.1)
     
     # Новые настройки для WebSocket
-    'websocket_top_pairs': 200,                   # Сколько пар в WebSocket
+    'websocket_top_pairs': 100,                   # Сколько пар в WebSocket (снижено для экономии памяти)
     'shitcoin_volume_threshold': 100_000_000,        # Объем < 0.5M$ = щиткоин
     'websocket_reconnect_delay': 5,               # Задержка перед переподключением
 }
@@ -154,7 +154,7 @@ WEBSOCKET_ANALYSIS_SETTINGS = {
     'max_signals_per_minute': 5,
     
     # История цен для анализа (сколько значений хранить)
-    'price_history_size': 100,  # ← это нужно для maxlen
+    'price_history_size': 60,  # 60 значений (~1 мин при 1 тик/сек)
 }
 
 # ============== НАСТРОЙКИ СКАНИРОВАНИЯ ПАР ==============

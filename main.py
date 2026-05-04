@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import gc
 import os
 import sys
 import asyncio
@@ -168,6 +169,7 @@ class CacheManager:
     def __init__(self, ttl=60):
         self.cache = {}
         self.ttl = ttl
+        self._last_eviction = time.time()
         logger.info(f"✅ CacheManager инициализирован (TTL: {ttl} сек)")
     
     def get(self, key: str) -> Optional[any]:
@@ -183,6 +185,17 @@ class CacheManager:
     def set(self, key: str, data: any):
         """Сохранение данных в кэш"""
         self.cache[key] = (data, time.time())
+        now = time.time()
+        if now - self._last_eviction > self.ttl * 2:
+            self.evict()
+            self._last_eviction = now
+    
+    def evict(self):
+        """Удаление устаревших записей"""
+        now = time.time()
+        expired = [k for k, (_, ts) in self.cache.items() if now - ts >= self.ttl]
+        for k in expired:
+            del self.cache[k]
     
     def clear(self):
         """Очистка кэша"""
@@ -9241,7 +9254,7 @@ class MultiExchangeScannerBot:
                 for tf_name, tf_value in TIMEFRAMES.items():
                     # limit = 100 if tf_name == 'current' else 50
                     if tf_name == 'daily':
-                        limit = 1000
+                        limit = 365
                     elif tf_name == 'current':
                         limit = 200
                     else:
@@ -9257,9 +9270,8 @@ class MultiExchangeScannerBot:
         """Загрузка всех таймфреймов для символа"""
         dataframes = {}
         for tf_name, tf_value in TIMEFRAMES.items():
-            # limit = 200 if tf_name == 'current' else 50
             if tf_name == 'daily':
-                limit = 1000  # ~4 года истории для ATH/ATL
+                limit = 365
             elif tf_name == 'current':
                 limit = 200
             else:
@@ -11088,6 +11100,7 @@ class MultiExchangeScannerBot:
                                 await self.send_signal(signal)
                             await asyncio.sleep(3)
                     last_full_scan = current_time
+                    gc.collect()
                 
                 await asyncio.sleep(PUMP_SCAN_INTERVAL)
                 

@@ -6,6 +6,7 @@ import json
 import logging
 import websockets
 import gzip
+from collections import deque
 from typing import Dict, List, Optional, Callable
 from datetime import datetime, timedelta
 import random
@@ -29,7 +30,8 @@ class BingXWebSocketManager:
         from config import WEBSOCKET_ANALYSIS_SETTINGS
         self.settings = WEBSOCKET_ANALYSIS_SETTINGS
         
-        self.price_history = {}
+        self._max_history = self.settings.get('price_history_size', 100)
+        self.price_history: Dict[str, deque] = {}
         self.signal_counters = {}
         
         logger.info("✅ BingX WebSocket Manager инициализирован")
@@ -130,16 +132,12 @@ class BingXWebSocketManager:
             }
             
             if symbol not in self.price_history:
-                self.price_history[symbol] = []
+                self.price_history[symbol] = deque(maxlen=self._max_history)
             
             self.price_history[symbol].append({
                 'price': current_price,
                 'time': datetime.now()
             })
-            
-            max_history = self.settings.get('price_history_size', 100)
-            if len(self.price_history[symbol]) > max_history:
-                self.price_history[symbol] = self.price_history[symbol][-max_history:]
             
             instant_signal = await self._check_instant_movement(symbol)
             if instant_signal:
