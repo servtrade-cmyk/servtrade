@@ -2644,10 +2644,8 @@ class ChartGenerator:
     def create_chart(self, df: pd.DataFrame, signal: Dict, coin: str, timeframe: str = '15m') -> BytesIO:
         """Создание графика с ценой, индикаторами и целями"""
 
-        import matplotlib.font_manager as fm
-        # Подавляем предупреждения о шрифтах
         import warnings
-        warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
+        warnings.filterwarnings('ignore', category=UserWarning, message='Glyph')
 
         plt.style.use(self.style)
         
@@ -2745,7 +2743,7 @@ class ChartGenerator:
                 # Добавляем метку
                 mid_price = (zone['min'] + zone['max']) / 2
                 ax1.text(plot_df.index[-1], mid_price, 
-                        f"📊 ДИСПЕРСИЯ {zone['strength']:.0f}%", 
+                        f"DISP {zone['strength']:.0f}%", 
                         color='orange', fontsize=7, alpha=0.7,
                         verticalalignment='center',
                         horizontalalignment='right')
