@@ -11212,6 +11212,7 @@ class TelegramHandler:
         self.app.add_handler(CommandHandler("stats", self.stats_command))
         self.app.add_handler(CommandHandler("groups", self.groups_command))
         self.app.add_handler(CommandHandler("health", self.health_command))
+        self.app.add_handler(CommandHandler("export_db", self.export_db_command))
         self.app.add_handler(CallbackQueryHandler(self.button))
         self.app.add_handler(CallbackQueryHandler(self.stats_button_handler, pattern="^stats_"))
     
@@ -11278,7 +11279,8 @@ class TelegramHandler:
             "/scan - ручное сканирование\n"
             "/status - состояние бота\n"
             "/stats - статистика сигналов\n"
-            "/groups - информация о группах",
+            "/groups - информация о группах\n"
+            "/export\\_db - скачать БД сигналов",
             parse_mode='Markdown'
         )
     
@@ -11325,6 +11327,29 @@ class TelegramHandler:
             f"• Последняя ошибка: {summary['last_error'] or '—'}\n"
         )
         await update.message.reply_text(msg, parse_mode='Markdown')
+
+    async def export_db_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        chat_id = str(update.effective_chat.id)
+        if chat_id != STATS_SETTINGS['stats_chat_id']:
+            await update.message.reply_text(
+                "❌ Эта команда доступна только в группе статистики"
+            )
+            return
+
+        db_file = STATS_SETTINGS['db_file']
+        if not os.path.exists(db_file):
+            await update.message.reply_text("❌ Файл БД не найден")
+            return
+
+        try:
+            await update.message.reply_document(
+                document=open(db_file, 'rb'),
+                filename='signals_database.json',
+                caption=f"📦 Экспорт БД сигналов\nРазмер: {os.path.getsize(db_file)} байт",
+            )
+        except Exception as e:
+            logger.error("export_db_command failed", exc_info=True)
+            await update.message.reply_text(f"❌ Ошибка: {e}")
 
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"📢 Команда /stats была вызвана в чате с ID: {update.effective_chat.id}")
