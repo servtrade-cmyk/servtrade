@@ -7895,6 +7895,94 @@ class MultiTimeframeAnalyzer:
 
 # ============== БЫСТРЫЙ ПАМП-СКАНЕР ==============
 
+def _format_zone_price(price: float) -> str:
+    if price < 0.00001: return f"{price:.8f}".rstrip('0').rstrip('.')
+    elif price < 0.0001: return f"{price:.7f}".rstrip('0').rstrip('.')
+    elif price < 0.001: return f"{price:.6f}".rstrip('0').rstrip('.')
+    elif price < 0.01: return f"{price:.5f}".rstrip('0').rstrip('.')
+    elif price < 0.1: return f"{price:.4f}".rstrip('0').rstrip('.')
+    elif price < 1: return f"{price:.3f}".rstrip('0').rstrip('.')
+    else: return f"{price:.2f}"
+
+
+def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
+    """Calculate entry zones from historical data with percentage fallback.
+    
+    Always returns zones — if historical analysis finds nothing,
+    generates percentage-based zones from current price.
+    """
+    from config import ENTRY_ZONES_GUARANTEED, TIMEFRAMES as TF_CONFIG
+
+    direction = signal.get('direction', '')
+    current_price = signal.get('price', 0)
+    if not current_price:
+        return []
+    is_long = direction.startswith('LONG')
+
+    cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
+    tf_name = cfg.get('timeframe', '15m')
+    offset = cfg.get('offset_candles', 3)
+    lookback = cfg.get('lookback', 50)
+    max_zones = cfg.get('max_zones', 3)
+    min_dist = cfg.get('min_distance_pct', 0.3) / 100
+
+    tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
+
+    zones = []
+
+    if dataframes:
+        # Try direct key first (e.g. '15m' added by _load_dataframes),
+        # then search TIMEFRAMES for a key whose value matches tf_name,
+        # then fall back to tf_map -> 'current'.
+        df_tf = dataframes.get(tf_name)
+        if df_tf is None:
+            for key, value in TF_CONFIG.items():
+                if value == tf_name and key in dataframes:
+                    df_tf = dataframes[key]
+                    break
+        if df_tf is None:
+            tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
+            df_key = tf_map.get(tf_name, 'current')
+            df_tf = dataframes.get(df_key)
+
+        if df_tf is not None and not df_tf.empty:
+            end_idx = max(offset, len(df_tf) - offset)
+            start_idx = max(0, end_idx - lookback)
+            df_window = df_tf.iloc[start_idx:end_idx]
+
+            if len(df_window) > 0:
+                if is_long:
+                    vals = df_window['low']
+                    vals = vals[vals < current_price * (1 - min_dist)]
+                else:
+                    vals = df_window['high']
+                    vals = vals[vals > current_price * (1 + min_dist)]
+
+                if len(vals) > 0:
+                    sorted_vals = sorted(vals, reverse=is_long)
+                    last_price = None
+                    for price in sorted_vals:
+                        if last_price is None or abs(price - last_price) / max(last_price, 0.00001) > min_dist:
+                            p_str = _format_zone_price(price)
+                            zones.append(f"{p_str} ({tf_display.get(tf_name, tf_name)})")
+                            last_price = price
+                        if len(zones) >= max_zones:
+                            break
+
+    # Fallback: percentage-based zones from current price
+    if not zones and current_price > 0:
+        pct_offsets = [0.01, 0.02, 0.03]
+        for pct in pct_offsets[:max_zones]:
+            if is_long:
+                zone_price = current_price * (1 - pct)
+            else:
+                zone_price = current_price * (1 + pct)
+            p_str = _format_zone_price(zone_price)
+            zones.append(f"{p_str} (-{pct*100:.0f}%)" if is_long else f"{p_str} (+{pct*100:.0f}%)")
+
+    return zones
+
+
 class FastPumpScanner:
     def __init__(self, fetcher: BaseExchangeFetcher, settings: Dict = None, analyzer=None, telegram_bot=None, chart_generator=None):
         self.fetcher = fetcher
@@ -8175,7 +8263,13 @@ class FastPumpScanner:
                 if df_tf is not None and not df_tf.empty:
                     df_tf = self.analyzer.calculate_indicators(df_tf)
                     dataframes[tf_name] = df_tf
-            
+            # Ensure 15m data is always available for zone calculation
+            if '15m' not in dataframes and TIMEFRAMES.get('current') != '15m':
+                df_15m = await self.fetcher.fetch_ohlcv(symbol, '15m', 200)
+                if df_15m is not None and not df_15m.empty:
+                    df_15m = self.analyzer.calculate_indicators(df_15m)
+                    dataframes['15m'] = df_15m
+
             if not dataframes:
                 logger.warning(f"⚠️ Нет данных для подтверждения {symbol}")
                 return
@@ -8892,63 +8986,8 @@ class FastPumpScanner:
 
         # Зоны добора
         entry_zones = signal.get('entry_zones', [])
-        if not entry_zones and dataframes:
-            from config import ENTRY_ZONES_GUARANTEED
-            direction = signal.get('direction', '')
-            current_price = signal.get('price', 0)
-            is_long = direction.startswith('LONG')
-            
-            cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-            tf_name = cfg.get('timeframe', '15m')
-            offset = cfg.get('offset_candles', 3)
-            lookback = cfg.get('lookback', 50)
-            max_zones = cfg.get('max_zones', 3)
-            min_dist = cfg.get('min_distance_pct', 0.3) / 100
-            
-            tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
-            tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
-            df_key = tf_map.get(tf_name, 'current')
-            df_tf = dataframes.get(df_key)
-            
-            zones = []
-            if df_tf is not None and not df_tf.empty:
-                # Пропускаем offset свечей от конца
-                end_idx = max(offset, len(df_tf) - offset)
-                start_idx = max(0, end_idx - lookback)
-                df_window = df_tf.iloc[start_idx:end_idx]
-                
-                logger.info(f"🔍 ЗОНЫ: is_long={is_long}, df_tf_len={len(df_tf)}, end_idx={end_idx}, start_idx={start_idx}, window_len={len(df_window)}")
-
-                if len(df_window) > 0:
-                    if is_long:
-                        vals = df_window['low']
-                        vals = vals[vals < current_price * (1 - min_dist)]
-                    else:
-                        vals = df_window['high']
-                        vals = vals[vals > current_price * (1 + min_dist)]
-                    
-                    if len(vals) > 0:
-                        sorted_vals = sorted(vals, reverse=is_long)
-                        last_price = None
-                        for price in sorted_vals:
-                            if last_price is None or abs(price - last_price) / max(last_price, 0.00001) > min_dist:
-                                if price < 0.00001: p_str = f"{price:.8f}".rstrip('0').rstrip('.')
-                                elif price < 0.0001: p_str = f"{price:.7f}".rstrip('0').rstrip('.')
-                                elif price < 0.001: p_str = f"{price:.6f}".rstrip('0').rstrip('.')
-                                elif price < 0.01: p_str = f"{price:.5f}".rstrip('0').rstrip('.')
-                                elif price < 0.1: p_str = f"{price:.4f}".rstrip('0').rstrip('.')
-                                elif price < 1: p_str = f"{price:.3f}".rstrip('0').rstrip('.')
-                                else: p_str = f"{price:.2f}"
-                                
-                                zones.append(f"{p_str} ({tf_display.get(tf_name, tf_name)})")
-                                last_price = price
-                            if len(zones) >= max_zones:
-                                break
-            
-            entry_zones = zones
-
-        # if entry_zones:
-        #     lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
+        if not entry_zones:
+            entry_zones = _calculate_entry_zones(signal, dataframes)
 
         # # # Risk/Reward
         # # if signal.get('rr_ratio', 0) > 0 or (risk_pct > 0 and reward_pct > 0):
@@ -9237,6 +9276,12 @@ class MultiExchangeScannerBot:
                     if df is not None and not df.empty:
                         df = self.analyzer.calculate_indicators(df)
                         dataframes[tf_name] = df
+                # Ensure 15m data is always available for zone calculation
+                if '15m' not in dataframes and TIMEFRAMES.get('current') != '15m':
+                    df_15m = await fetcher.fetch_ohlcv(symbol, '15m', 200)
+                    if df_15m is not None and not df_15m.empty:
+                        df_15m = self.analyzer.calculate_indicators(df_15m)
+                        dataframes['15m'] = df_15m
                 break
         return dataframes if dataframes else None
 
@@ -9254,6 +9299,12 @@ class MultiExchangeScannerBot:
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
                 dataframes[tf_name] = df
+        # Ensure 15m data is always available for zone calculation
+        if '15m' not in dataframes and TIMEFRAMES.get('current') != '15m':
+            df_15m = await fetcher.fetch_ohlcv(symbol, '15m', 200)
+            if df_15m is not None and not df_15m.empty:
+                df_15m = self.analyzer.calculate_indicators(df_15m)
+                dataframes['15m'] = df_15m
         logger.info(f"🔍 Загружено ТФ для {symbol}: {list(dataframes.keys())}")
         return dataframes if dataframes else None
 
@@ -9604,58 +9655,8 @@ class MultiExchangeScannerBot:
                 
         # Зоны добора
         entry_zones = signal.get('entry_zones', [])
-        if not entry_zones and dataframes:
-            from config import ENTRY_ZONES_GUARANTEED
-            direction = signal.get('direction', '')
-            current_price = signal.get('price', 0)
-            is_long = direction.startswith('LONG')
-            
-            cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-            tf_name = cfg.get('timeframe', '15m')
-            offset = cfg.get('offset_candles', 3)
-            lookback = cfg.get('lookback', 50)
-            max_zones = cfg.get('max_zones', 3)
-            min_dist = cfg.get('min_distance_pct', 0.3) / 100
-            
-            tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
-            tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
-            df_key = tf_map.get(tf_name, 'current')
-            df_tf = dataframes.get(df_key)
-            
-            zones = []
-            if df_tf is not None and not df_tf.empty:
-                # Пропускаем offset свечей от конца
-                end_idx = max(offset, len(df_tf) - offset)
-                start_idx = max(0, end_idx - lookback)
-                df_window = df_tf.iloc[start_idx:end_idx]
-                
-                if len(df_window) > 0:
-                    if is_long:
-                        vals = df_window['low']
-                        vals = vals[vals < current_price * (1 - min_dist)]
-                    else:
-                        vals = df_window['high']
-                        vals = vals[vals > current_price * (1 + min_dist)]
-                    
-                    if len(vals) > 0:
-                        sorted_vals = sorted(vals, reverse=is_long)
-                        last_price = None
-                        for price in sorted_vals:
-                            if last_price is None or abs(price - last_price) / max(last_price, 0.00001) > min_dist:
-                                if price < 0.00001: p_str = f"{price:.8f}".rstrip('0').rstrip('.')
-                                elif price < 0.0001: p_str = f"{price:.7f}".rstrip('0').rstrip('.')
-                                elif price < 0.001: p_str = f"{price:.6f}".rstrip('0').rstrip('.')
-                                elif price < 0.01: p_str = f"{price:.5f}".rstrip('0').rstrip('.')
-                                elif price < 0.1: p_str = f"{price:.4f}".rstrip('0').rstrip('.')
-                                elif price < 1: p_str = f"{price:.3f}".rstrip('0').rstrip('.')
-                                else: p_str = f"{price:.2f}"
-                                
-                                zones.append(f"{p_str} ({tf_display.get(tf_name, tf_name)})")
-                                last_price = price
-                            if len(zones) >= max_zones:
-                                break
-            
-            entry_zones = zones
+        if not entry_zones:
+            entry_zones = _calculate_entry_zones(signal, dataframes)
 
         if entry_zones:
             lines.append(f"🟣 Зоны добора: {' | '.join(entry_zones)}")
@@ -10651,53 +10652,8 @@ class MultiExchangeScannerBot:
                                         pump_percent = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))                                                                               
                                         
                                         # Расчёт зон для VIP
-                                        if not signal.get('entry_zones') and dataframes:
-                                            from config import ENTRY_ZONES_GUARANTEED
-                                            direction = signal.get('direction', '')
-                                            current_price = signal.get('price', 0)
-                                            is_long = direction.startswith('LONG')
-                                            cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-                                            tf_name = cfg.get('timeframe', '15m')
-                                            lookback = cfg.get('lookback', 50)
-                                            max_zones = cfg.get('max_zones', 3)
-                                            min_dist = cfg.get('min_distance_pct', 0.3) / 100
-                                            tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
-                                            tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
-                                            df_key = tf_map.get(tf_name, 'current')
-                                            df_tf = dataframes.get(df_key)
-                                            if df_tf is None:
-                                                df_key = 'current'
-                                                df_tf = dataframes.get(df_key)
-                                            
-                                            zones = []
-                                            if df_tf is not None and not df_tf.empty:
-                                                lb = min(lookback, len(df_tf))
-                                                if is_long:
-                                                    vals = df_tf['low'].tail(lb)
-                                                    vals = vals[vals < current_price * (1 - min_dist)]
-                                                else:
-                                                    vals = df_tf['high'].tail(lb)
-                                                    vals = vals[vals > current_price * (1 + min_dist)]
-                                                
-                                                if len(vals) > 0:
-                                                    sorted_vals = sorted(vals, reverse=is_long)
-                                                    last_price = None
-                                                    for price in sorted_vals:
-                                                        if last_price is None or abs(price - last_price) / max(last_price, 0.00001) > min_dist:
-                                                            if price < 0.00001: p_str = f"{price:.8f}".rstrip('0').rstrip('.')
-                                                            elif price < 0.0001: p_str = f"{price:.7f}".rstrip('0').rstrip('.')
-                                                            elif price < 0.001: p_str = f"{price:.6f}".rstrip('0').rstrip('.')
-                                                            elif price < 0.01: p_str = f"{price:.5f}".rstrip('0').rstrip('.')
-                                                            elif price < 0.1: p_str = f"{price:.4f}".rstrip('0').rstrip('.')
-                                                            elif price < 1: p_str = f"{price:.3f}".rstrip('0').rstrip('.')
-                                                            else: p_str = f"{price:.2f}"
-                                                            zones.append(f"{p_str} ({tf_display.get(tf_name, tf_name)})")
-                                                            last_price = price
-                                                        if len(zones) >= max_zones:
-                                                            break
-                                            
-                                            if zones:
-                                                signal['entry_zones'] = zones
+                                        if not signal.get('entry_zones'):
+                                            signal['entry_zones'] = _calculate_entry_zones(signal, dataframes)
                                         
                                         filtered_msg, _ = self.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
                                         
@@ -10762,53 +10718,8 @@ class MultiExchangeScannerBot:
                                     pump_percent = abs(signal.get('pump_dump', [{}])[0].get('change_percent', 0))
 
                                     # Расчёт зон для VIP
-                                    if not signal.get('entry_zones') and dataframes:
-                                        from config import ENTRY_ZONES_GUARANTEED
-                                        direction = signal.get('direction', '')
-                                        current_price = signal.get('price', 0)
-                                        is_long = direction.startswith('LONG')
-                                        cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
-                                        tf_name = cfg.get('timeframe', '15m')
-                                        lookback = cfg.get('lookback', 50)
-                                        max_zones = cfg.get('max_zones', 3)
-                                        min_dist = cfg.get('min_distance_pct', 0.3) / 100
-                                        tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
-                                        tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
-                                        df_key = tf_map.get(tf_name, 'current')
-                                        df_tf = dataframes.get(df_key)
-                                        if df_tf is None:
-                                            df_key = 'current'
-                                            df_tf = dataframes.get(df_key)
-                                        
-                                        zones = []
-                                        if df_tf is not None and not df_tf.empty:
-                                            lb = min(lookback, len(df_tf))
-                                            if is_long:
-                                                vals = df_tf['low'].tail(lb)
-                                                vals = vals[vals < current_price * (1 - min_dist)]
-                                            else:
-                                                vals = df_tf['high'].tail(lb)
-                                                vals = vals[vals > current_price * (1 + min_dist)]
-                                            
-                                            if len(vals) > 0:
-                                                sorted_vals = sorted(vals, reverse=is_long)
-                                                last_price = None
-                                                for price in sorted_vals:
-                                                    if last_price is None or abs(price - last_price) / max(last_price, 0.00001) > min_dist:
-                                                        if price < 0.00001: p_str = f"{price:.8f}".rstrip('0').rstrip('.')
-                                                        elif price < 0.0001: p_str = f"{price:.7f}".rstrip('0').rstrip('.')
-                                                        elif price < 0.001: p_str = f"{price:.6f}".rstrip('0').rstrip('.')
-                                                        elif price < 0.01: p_str = f"{price:.5f}".rstrip('0').rstrip('.')
-                                                        elif price < 0.1: p_str = f"{price:.4f}".rstrip('0').rstrip('.')
-                                                        elif price < 1: p_str = f"{price:.3f}".rstrip('0').rstrip('.')
-                                                        else: p_str = f"{price:.2f}"
-                                                        zones.append(f"{p_str} ({tf_display.get(tf_name, tf_name)})")
-                                                        last_price = price
-                                                    if len(zones) >= max_zones:
-                                                        break
-                                        
-                                        if zones:
-                                            signal['entry_zones'] = zones                                    
+                                    if not signal.get('entry_zones'):
+                                        signal['entry_zones'] = _calculate_entry_zones(signal, dataframes)
 
                                     filtered_msg, _ = self.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
                                     
