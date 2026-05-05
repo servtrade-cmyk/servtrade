@@ -7911,7 +7911,7 @@ def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
     Always returns zones — if historical analysis finds nothing,
     generates percentage-based zones from current price.
     """
-    from config import ENTRY_ZONES_GUARANTEED
+    from config import ENTRY_ZONES_GUARANTEED, TIMEFRAMES as TF_CONFIG
 
     direction = signal.get('direction', '')
     current_price = signal.get('price', 0)
@@ -7926,14 +7926,24 @@ def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
     max_zones = cfg.get('max_zones', 3)
     min_dist = cfg.get('min_distance_pct', 0.3) / 100
 
-    tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
     tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
 
     zones = []
 
     if dataframes:
-        df_key = tf_map.get(tf_name, 'current')
-        df_tf = dataframes.get(df_key)
+        # Try direct key first (e.g. '15m' added by _load_dataframes),
+        # then search TIMEFRAMES for a key whose value matches tf_name,
+        # then fall back to tf_map -> 'current'.
+        df_tf = dataframes.get(tf_name)
+        if df_tf is None:
+            for key, value in TF_CONFIG.items():
+                if value == tf_name and key in dataframes:
+                    df_tf = dataframes[key]
+                    break
+        if df_tf is None:
+            tf_map = ENTRY_ZONES_GUARANTEED.get('tf_map', {})
+            df_key = tf_map.get(tf_name, 'current')
+            df_tf = dataframes.get(df_key)
 
         if df_tf is not None and not df_tf.empty:
             end_idx = max(offset, len(df_tf) - offset)
@@ -8253,7 +8263,13 @@ class FastPumpScanner:
                 if df_tf is not None and not df_tf.empty:
                     df_tf = self.analyzer.calculate_indicators(df_tf)
                     dataframes[tf_name] = df_tf
-            
+            # Ensure 15m data is always available for zone calculation
+            if '15m' not in dataframes and TIMEFRAMES.get('current') != '15m':
+                df_15m = await self.fetcher.fetch_ohlcv(symbol, '15m', 200)
+                if df_15m is not None and not df_15m.empty:
+                    df_15m = self.analyzer.calculate_indicators(df_15m)
+                    dataframes['15m'] = df_15m
+
             if not dataframes:
                 logger.warning(f"⚠️ Нет данных для подтверждения {symbol}")
                 return
@@ -9260,6 +9276,12 @@ class MultiExchangeScannerBot:
                     if df is not None and not df.empty:
                         df = self.analyzer.calculate_indicators(df)
                         dataframes[tf_name] = df
+                # Ensure 15m data is always available for zone calculation
+                if '15m' not in dataframes and TIMEFRAMES.get('current') != '15m':
+                    df_15m = await fetcher.fetch_ohlcv(symbol, '15m', 200)
+                    if df_15m is not None and not df_15m.empty:
+                        df_15m = self.analyzer.calculate_indicators(df_15m)
+                        dataframes['15m'] = df_15m
                 break
         return dataframes if dataframes else None
 
@@ -9277,6 +9299,12 @@ class MultiExchangeScannerBot:
             if df is not None and not df.empty:
                 df = self.analyzer.calculate_indicators(df)
                 dataframes[tf_name] = df
+        # Ensure 15m data is always available for zone calculation
+        if '15m' not in dataframes and TIMEFRAMES.get('current') != '15m':
+            df_15m = await fetcher.fetch_ohlcv(symbol, '15m', 200)
+            if df_15m is not None and not df_15m.empty:
+                df_15m = self.analyzer.calculate_indicators(df_15m)
+                dataframes['15m'] = df_15m
         logger.info(f"🔍 Загружено ТФ для {symbol}: {list(dataframes.keys())}")
         return dataframes if dataframes else None
 
