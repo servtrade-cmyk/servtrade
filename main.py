@@ -7922,7 +7922,6 @@ def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
     cfg = ENTRY_ZONES_GUARANTEED['long'] if is_long else ENTRY_ZONES_GUARANTEED['short']
     tf_name = cfg.get('timeframe', '15m')
     offset = cfg.get('offset_candles', 3)
-    lookback = cfg.get('lookback', 50)
     max_zones = cfg.get('max_zones', 3)
     min_dist = cfg.get('min_distance_pct', 0.3) / 100
 
@@ -7946,9 +7945,8 @@ def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
             df_tf = dataframes.get(df_key)
 
         if df_tf is not None and not df_tf.empty:
-            end_idx = max(offset, len(df_tf) - offset)
-            start_idx = max(0, end_idx - lookback)
-            df_window = df_tf.iloc[start_idx:end_idx]
+            end_idx = max(0, len(df_tf) - offset)
+            df_window = df_tf.iloc[:end_idx]
 
             if len(df_window) > 0:
                 if is_long:
