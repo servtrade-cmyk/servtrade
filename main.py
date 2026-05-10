@@ -11101,17 +11101,28 @@ class TelegramHandler:
         self.app = Application.builder().token(TELEGRAM_TOKEN).build()
         self.register()        
         self.breakout_tracker = BreakoutTracker() # Трекер пробоев
+
+    def _is_admin(self, update: Update) -> bool:
+        from config import ADMIN_CHAT_ID
+        if not ADMIN_CHAT_ID:
+            return True
+        return str(update.effective_user.id) == ADMIN_CHAT_ID
+
     def register(self):
         self.app.add_handler(CommandHandler("start", self.start))
         self.app.add_handler(CommandHandler("scan", self.scan))
         self.app.add_handler(CommandHandler("status", self.status))
         self.app.add_handler(CommandHandler("help", self.help))
         self.app.add_handler(CommandHandler("stats", self.stats_command))
+        self.app.add_handler(CommandHandler("stats_pump", self.stats_pump_command))
+        self.app.add_handler(CommandHandler("stats_vip", self.stats_vip_command))
+        self.app.add_handler(CommandHandler("stats_regular", self.stats_regular_command))
+        self.app.add_handler(CommandHandler("stats_accumulation", self.stats_accumulation_command))
         self.app.add_handler(CommandHandler("groups", self.groups_command))
         self.app.add_handler(CommandHandler("health", self.health_command))
         self.app.add_handler(CommandHandler("export_db", self.export_db_command))
-        self.app.add_handler(CallbackQueryHandler(self.button))
         self.app.add_handler(CallbackQueryHandler(self.stats_button_handler, pattern="^stats_"))
+        self.app.add_handler(CallbackQueryHandler(self.button, pattern="^(copy_|refresh_|details_|back_)"))
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
@@ -11152,6 +11163,9 @@ class TelegramHandler:
         await update.message.reply_text(text, parse_mode='Markdown')
     
     async def groups_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not self._is_admin(update):
+            await update.message.reply_text("❌ Команда доступна только администратору")
+            return
         text = "*📊 ГРУППЫ СИГНАЛОВ*\n\n"
         text += "🔹 *Основная группа* - обычные LONG/SHORT сигналы\n"
         text += "   Технический анализ, тренды, уровни\n\n"
@@ -11182,11 +11196,8 @@ class TelegramHandler:
         )
     
     async def health_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        chat_id = str(update.effective_chat.id)
-        if chat_id != STATS_SETTINGS['stats_chat_id']:
-            await update.message.reply_text(
-                "❌ Эта команда доступна только в группе статистики"
-            )
+        if not self._is_admin(update):
+            await update.message.reply_text("❌ Команда доступна только администратору")
             return
 
         if not hasattr(self.bot, 'stats'):
@@ -11226,11 +11237,8 @@ class TelegramHandler:
         await update.message.reply_text(msg, parse_mode='Markdown')
 
     async def export_db_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        chat_id = str(update.effective_chat.id)
-        if chat_id != STATS_SETTINGS['stats_chat_id']:
-            await update.message.reply_text(
-                "❌ Эта команда доступна только в группе статистики"
-            )
+        if not self._is_admin(update):
+            await update.message.reply_text("❌ Команда доступна только администратору")
             return
 
         db_file = STATS_SETTINGS['db_file']
@@ -11304,7 +11312,27 @@ class TelegramHandler:
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    
+
+    async def _send_typed_stats(self, update: Update, signal_type: str, label: str):
+        if not hasattr(self.bot, 'stats'):
+            await update.message.reply_text("❌ Статистика не инициализирована")
+            return
+        stats = self.bot.stats.get_statistics(days=7, signal_type=signal_type)
+        msg = self.bot.stats.format_stats_message(stats, 7, signal_type=signal_type)
+        await update.message.reply_text(msg, parse_mode='Markdown')
+
+    async def stats_pump_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._send_typed_stats(update, 'pump', 'Памп')
+
+    async def stats_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._send_typed_stats(update, 'vip_pump', 'VIP')
+
+    async def stats_regular_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._send_typed_stats(update, 'regular', 'Обычные')
+
+    async def stats_accumulation_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._send_typed_stats(update, 'accumulation', 'Накопление')
+
     async def stats_button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
@@ -11537,6 +11565,20 @@ class TelegramHandler:
             logging.getLogger(name).addFilter(_ConflictFilter())
 
         await self.app.initialize()
+
+        # Register bot menu commands (shown when user types '/')
+        from telegram import BotCommand
+        await self.app.bot.set_my_commands([
+            BotCommand("start", "Запуск бота"),
+            BotCommand("stats", "Общая статистика"),
+            BotCommand("stats_pump", "Статистика памп-дамп"),
+            BotCommand("stats_vip", "Статистика VIP сигналов"),
+            BotCommand("stats_regular", "Статистика обычных сигналов"),
+            BotCommand("stats_accumulation", "Статистика накопления"),
+            BotCommand("status", "Статус бота"),
+            BotCommand("help", "Помощь"),
+        ])
+
         await self.app.updater.start_polling(drop_pending_updates=True)
         await self.app.start()
         logger.info("✅ Telegram polling запущен — команды бота активны")

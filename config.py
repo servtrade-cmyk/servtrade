@@ -15,6 +15,7 @@ STATS_CHAT_ID = os.getenv('STATS_CHAT_ID', '')                   # Статис�
 ACCUMULATION_CHAT_ID = os.getenv('ACCUMULATION_CHAT_ID', '')     # Накопление
 SHITCOIN_ALERT_CHAT_ID = os.getenv('SHITCOIN_ALERT_CHAT_ID', '') # ID чата для оповещений о щиткоинах (дискавери/подготовка)
 VIP_PUMP_CHAT_ID = os.getenv('VIP_PUMP_CHAT_ID', '')
+ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID', '')                   # Telegram ID администратора
 
 UPDATE_INTERVAL = int(os.getenv('UPDATE_INTERVAL', 300))       # 15 минут для основного анализа
 PUMP_SCAN_INTERVAL = int(os.getenv('PUMP_SCAN_INTERVAL', 30))  # 30 секунд для памп-сканера
