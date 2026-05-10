@@ -11668,6 +11668,16 @@ class TelegramHandler:
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     
+    def _format_signal(self, signal, contract_info, dataframes):
+        """Choose correct formatter based on signal type."""
+        sig_type = signal.get('signal_type', '')
+        if sig_type in ('PUMP', 'DUMP', 'PUMP_BREAKOUT', 'DUMP_BREAKOUT'):
+            return self.bot.format_pump_message(signal, contract_info, dataframes=dataframes)
+        pump_percent = None
+        if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
+            pump_percent = signal['pump_dump'][0].get('change_percent')
+        return self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
+
     async def _send_signal_with_chart(self, context, chat_id, signal, coin, msg, keyboard):
         """Send signal message with chart. Returns True if chart was sent."""
         try:
@@ -11722,11 +11732,7 @@ class TelegramHandler:
                         dataframes = await self.bot._load_dataframes_for_symbol(fetcher, signal['symbol'])
                         break
 
-                pump_percent = None
-                if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
-                    pump_percent = signal['pump_dump'][0].get('change_percent')
-
-                msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
+                msg, keyboard = self._format_signal(signal, contract_info, dataframes)
 
                 await query.message.delete()
                 await self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard)
@@ -11782,10 +11788,7 @@ class TelegramHandler:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
                         dataframes = await self.bot._load_dataframes_for_symbol(fetcher, signal['symbol'])
                         break
-                pump_percent = None
-                if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
-                    pump_percent = signal['pump_dump'][0].get('change_percent')
-                msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
+                msg, keyboard = self._format_signal(signal, contract_info, dataframes)
                 # Delete details message, send signal back with chart
                 await query.message.delete()
                 await self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard)
