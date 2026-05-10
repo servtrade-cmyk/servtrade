@@ -11441,6 +11441,35 @@ class TelegramHandler:
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     
+    async def _send_signal_with_chart(self, context, chat_id, signal, coin, msg, keyboard):
+        """Send signal message with chart. Returns True if chart was sent."""
+        try:
+            df = None
+            for fetcher in self.bot.fetchers.values():
+                if fetcher.name == signal['exchange']:
+                    df = await fetcher.fetch_ohlcv(signal['symbol'], TIMEFRAMES.get('current', '15m'), limit=200)
+                    break
+            if df is not None and not df.empty:
+                df = self.bot.analyzer.calculate_indicators(df)
+                chart_buf = self.bot.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=chart_buf,
+                    caption=msg,
+                    parse_mode='HTML',
+                    reply_markup=keyboard
+                )
+                return True
+        except Exception as e:
+            logger.warning(f"⚠️ Не удалось создать график для {coin}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=msg,
+            parse_mode='HTML',
+            reply_markup=keyboard
+        )
+        return False
+
     async def button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         data = query.data
@@ -11448,28 +11477,39 @@ class TelegramHandler:
 
         if data.startswith("copy_"):
             coin = data.replace("copy_", "")
-            await query.answer(f"📋 {coin}", show_alert=True)
+            # Send coin name as copyable <code> tag in private message to user
+            try:
+                await context.bot.send_message(
+                    chat_id=update.effective_user.id,
+                    text=f"<code>{coin}</code>",
+                    parse_mode='HTML'
+                )
+                await query.answer(f"📋 {coin} отправлен в личные сообщения")
+            except Exception:
+                # User hasn't started private chat with bot
+                await query.answer(
+                    f"📋 {coin}\n\nЧтобы копировать в ЛС, напишите боту /start в личные сообщения",
+                    show_alert=True
+                )
             return
 
         elif data.startswith("refresh_"):
             coin = data.replace("refresh_", "")
-            await query.answer("🔄 Обновляю...")
 
             if coin not in self.bot.last_signals:
-                await query.answer(f"❌ Нет данных для {coin}", show_alert=True)
+                await query.answer(f"❌ Сигнал {coin} не найден (бот был перезапущен?)", show_alert=True)
                 return
 
+            await query.answer("🔄 Обновляю...")
             try:
                 signal_data = self.bot.last_signals[coin]
                 signal = signal_data['signal']
 
                 contract_info = None
-                df = None
                 dataframes = None
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
-                        df = await fetcher.fetch_ohlcv(signal['symbol'], TIMEFRAMES.get('current', '15m'), limit=200)
                         dataframes = await self.bot._load_dataframes_for_symbol(fetcher, signal['symbol'])
                         break
 
@@ -11479,25 +11519,8 @@ class TelegramHandler:
 
                 msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
 
-                # Delete old message and send new one (works for both photo and text)
                 await query.message.delete()
-                if df is not None and not df.empty:
-                    df = self.bot.analyzer.calculate_indicators(df)
-                    chart_buf = self.bot.chart_generator.create_chart(df, signal, coin, TIMEFRAMES.get('current', '15m'))
-                    await context.bot.send_photo(
-                        chat_id=update.effective_chat.id,
-                        photo=chart_buf,
-                        caption=msg,
-                        parse_mode='HTML',
-                        reply_markup=keyboard
-                    )
-                else:
-                    await context.bot.send_message(
-                        chat_id=update.effective_chat.id,
-                        text=msg,
-                        parse_mode='HTML',
-                        reply_markup=keyboard
-                    )
+                await self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard)
             except Exception as e:
                 logger.error(f"❌ Ошибка обновления сигнала {coin}: {e}")
                 await query.answer(f"❌ Ошибка: {e}", show_alert=True)
@@ -11506,7 +11529,7 @@ class TelegramHandler:
         elif data.startswith("details_"):
             coin = data.replace("details_", "")
             if coin not in self.bot.last_signals:
-                await query.answer(f"❌ Нет данных для {coin}", show_alert=True)
+                await query.answer(f"❌ Сигнал {coin} не найден (бот был перезапущен?)", show_alert=True)
                 return
 
             await query.answer("📊 Загружаю...")
@@ -11520,6 +11543,8 @@ class TelegramHandler:
                         detailed, keyboard = await self.bot.get_detailed_analysis(
                             fetcher, signal['symbol'], coin, signal_time
                         )
+                        # Delete signal message, replace with detailed analysis
+                        await query.message.delete()
                         await context.bot.send_message(
                             chat_id=update.effective_chat.id,
                             text=detailed,
@@ -11535,7 +11560,7 @@ class TelegramHandler:
         elif data.startswith("back_"):
             coin = data.replace("back_", "")
             if coin not in self.bot.last_signals:
-                await query.answer(f"❌ Нет данных для {coin}", show_alert=True)
+                await query.answer(f"❌ Сигнал {coin} не найден (бот был перезапущен?)", show_alert=True)
                 return
 
             await query.answer("↩️ Возврат...")
@@ -11552,14 +11577,9 @@ class TelegramHandler:
                 if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
                     pump_percent = signal['pump_dump'][0].get('change_percent')
                 msg, keyboard = self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
-                # Delete old message and send fresh (works for both text and photo messages)
+                # Delete details message, send signal back with chart
                 await query.message.delete()
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=msg,
-                    parse_mode='HTML',
-                    reply_markup=keyboard
-                )
+                await self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard)
             except Exception as e:
                 logger.error(f"❌ Ошибка возврата {coin}: {e}")
                 await query.answer(f"❌ Ошибка: {e}", show_alert=True)
