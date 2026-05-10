@@ -10836,50 +10836,178 @@ class MultiExchangeScannerBot:
             if signal_time:
                 lines.append(f"⏱️ Время сигнала: `{signal_time}`")
             lines.append(f"⏱️ Текущее время: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n")
-            
+
+            # Contract info
             contract_info = await fetcher.fetch_contract_info(symbol)
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
             lines.append("⚡️ *ПАРАМЕТРЫ КОНТРАКТА:*")
             lines.append(f"└ Макс. плечо: `{contract_info.get('max_leverage', 100)}x`")
             lines.append(f"└ Мин. вход: `{contract_info.get('min_amount', 5):.2f} USDT`")
             lines.append(f"└ Макс. вход: `{self.format_compact(contract_info.get('max_amount', 2_000_000))} USDT`")
-            
+
+            # Fetch current price data
+            df_15m = await fetcher.fetch_ohlcv(symbol, '15m', limit=200)
+            current_price = None
+            if df_15m is not None and not df_15m.empty:
+                df_15m = self.analyzer.calculate_indicators(df_15m)
+                current_price = float(df_15m['close'].iloc[-1])
+                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"💰 *ТЕКУЩАЯ ЦЕНА:* `{current_price}`")
+
+                # RSI
+                if 'rsi' in df_15m.columns:
+                    rsi_val = df_15m['rsi'].iloc[-1]
+                    rsi_emoji = "🔴" if rsi_val > 70 else "🟢" if rsi_val < 30 else "🟡"
+                    rsi_zone = "перекуплен" if rsi_val > 70 else "перепродан" if rsi_val < 30 else "нейтральный"
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"📈 *ИНДИКАТОРЫ (15м):*")
+                    lines.append(f"└ {rsi_emoji} RSI: `{rsi_val:.1f}` ({rsi_zone})")
+
+                # MACD
+                if 'macd' in df_15m.columns and 'macd_signal' in df_15m.columns:
+                    macd_val = df_15m['macd'].iloc[-1]
+                    macd_sig = df_15m['macd_signal'].iloc[-1]
+                    macd_hist = macd_val - macd_sig
+                    macd_dir = "бычий" if macd_hist > 0 else "медвежий"
+                    macd_emoji = "🟢" if macd_hist > 0 else "🔴"
+                    lines.append(f"└ {macd_emoji} MACD: `{macd_val:.6f}` ({macd_dir})")
+                    lines.append(f"└ Signal: `{macd_sig:.6f}` | Hist: `{macd_hist:.6f}`")
+
+                # EMA
+                ema_lines = []
+                for period in [21, 50, 200]:
+                    col = f'ema_{period}'
+                    if col in df_15m.columns:
+                        ema_val = df_15m[col].iloc[-1]
+                        pos = "выше" if current_price > ema_val else "ниже"
+                        diff_pct = ((current_price - ema_val) / ema_val) * 100
+                        ema_lines.append(f"└ EMA {period}: `{ema_val:.6f}` (цена {pos}, {diff_pct:+.2f}%)")
+                if ema_lines:
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"📏 *СКОЛЬЗЯЩИЕ СРЕДНИЕ:*")
+                    lines.extend(ema_lines)
+
+                # VWAP
+                if 'vwap' in df_15m.columns:
+                    vwap_val = df_15m['vwap'].iloc[-1]
+                    vwap_pos = "выше" if current_price > vwap_val else "ниже"
+                    lines.append(f"└ VWAP: `{vwap_val:.6f}` (цена {vwap_pos})")
+
+                # Bollinger Bands
+                if 'bb_upper' in df_15m.columns and 'bb_lower' in df_15m.columns:
+                    bb_upper = df_15m['bb_upper'].iloc[-1]
+                    bb_lower = df_15m['bb_lower'].iloc[-1]
+                    bb_width = ((bb_upper - bb_lower) / current_price) * 100
+                    bb_pos = "у верхней" if current_price > (bb_upper + bb_lower) / 2 else "у нижней"
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"📊 *BOLLINGER BANDS:*")
+                    lines.append(f"└ Верхняя: `{bb_upper:.6f}`")
+                    lines.append(f"└ Нижняя: `{bb_lower:.6f}`")
+                    lines.append(f"└ Ширина: `{bb_width:.2f}%` (цена {bb_pos})")
+
+                # Volume
+                vol_current = float(df_15m['volume'].iloc[-1])
+                vol_avg = float(df_15m['volume'].tail(20).mean())
+                vol_ratio = vol_current / vol_avg if vol_avg > 0 else 0
+                vol_emoji = "🔥" if vol_ratio > 2 else "📊" if vol_ratio > 1 else "📉"
+                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"📦 *ОБЪЁМ:*")
+                lines.append(f"└ {vol_emoji} Текущий: `{self.format_compact(vol_current)}`")
+                lines.append(f"└ Средний (20): `{self.format_compact(vol_avg)}`")
+                lines.append(f"└ Соотношение: `{vol_ratio:.1f}x`")
+
+                # ATR (volatility)
+                if 'atr' in df_15m.columns:
+                    atr_val = df_15m['atr'].iloc[-1]
+                    atr_pct = (atr_val / current_price) * 100
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"📐 *ВОЛАТИЛЬНОСТЬ:*")
+                    lines.append(f"└ ATR: `{atr_val:.6f}` ({atr_pct:.2f}%)")
+
+            # Signal data (reasons, targets, zones)
             if coin in self.last_signals:
                 signal = self.last_signals[coin]['signal']
-                lines.append("\n📊 *ТЕХНИЧЕСКИЙ АНАЛИЗ:*")
-                for reason in signal['reasons']:
-                    clean_reason = reason.replace("📊 ", "").replace("✅ ", "").replace("🔄 ", "")
-                    lines.append(f"└ {clean_reason}")
-                
+
+                # Direction and targets
+                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"🎯 *СИГНАЛ:*")
+                lines.append(f"└ Направление: *{signal.get('direction', 'N/A')}*")
+                if signal.get('targets'):
+                    for i, t in enumerate(signal['targets'][:3], 1):
+                        lines.append(f"└ Цель {i}: `{t['price']}` ({t['percent']:+.1f}%)")
+                if signal.get('stop_loss'):
+                    lines.append(f"└ Стоп-лосс: `{signal['stop_loss']['price']}` ({signal['stop_loss']['percent']:+.1f}%)")
+
+                # Entry zones
+                if signal.get('entry_zones'):
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"🟣 *ЗОНЫ ДОБОРА:*")
+                    for zone in signal['entry_zones']:
+                        if isinstance(zone, dict):
+                            lines.append(f"└ `{zone.get('price', zone)}` ({zone.get('tf', '')})")
+                        else:
+                            lines.append(f"└ `{zone}`")
+
+                # Reasons
+                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                lines.append(f"💡 *ВСЕ ПРИЧИНЫ СИГНАЛА:*")
+                for reason in signal.get('reasons', []):
+                    clean = reason.replace("📊 ", "").replace("✅ ", "").replace("🔄 ", "").replace("📈 ", "").replace("📉 ", "")
+                    lines.append(f"└ {clean}")
+
+                # Fibonacci
                 if 'fibonacci' in signal:
-                    lines.append("\n📐 *ФИБОНАЧЧИ:*")
-                    for tf, levels in signal['fibonacci']['levels'].items():
-                        lines.append(f"└ {tf.upper()}: {len(levels)} уровней")
-                
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"📐 *ФИБОНАЧЧИ:*")
+                    fib = signal['fibonacci']
+                    for tf, levels in fib.get('levels', {}).items():
+                        lines.append(f"└ *{tf.upper()}:* {len(levels)} уровней")
+                        for lvl in levels[:5]:
+                            if isinstance(lvl, dict):
+                                lines.append(f"   • `{lvl.get('level', '')}`: `{lvl.get('price', '')}`")
+
+                # Volume Profile
                 if 'volume_profile' in signal:
-                    lines.append("\n📊 *VOLUME PROFILE:*")
-                    for tf, vp in signal['volume_profile']['levels'].items():
-                        lines.append(f"└ {tf.upper()}: POC={vp['poc']:.2f}")
-                
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"📊 *VOLUME PROFILE:*")
+                    for tf, vp in signal['volume_profile'].get('levels', {}).items():
+                        lines.append(f"└ *{tf.upper()}:* POC=`{vp.get('poc', 0):.6f}`")
+                        if 'vah' in vp:
+                            lines.append(f"   • VAH: `{vp['vah']:.6f}` | VAL: `{vp.get('val', 0):.6f}`")
+
+                # Accumulation
                 if 'accumulation' in signal:
-                    lines.append("\n📦 *НАКОПЛЕНИЕ:*")
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"📦 *НАКОПЛЕНИЕ:*")
                     acc = signal['accumulation']
-                    for sig in acc.get('signals', [])[:3]:
+                    for sig in acc.get('signals', [])[:5]:
                         lines.append(f"└ {sig}")
                     if acc.get('potential', {}).get('has_potential'):
                         pot = acc['potential']
-                        lines.append(f"└ Потенциал: {pot['target_pct']:+.2f}% до {pot['target_level']}")
-            
+                        lines.append(f"└ Потенциал: `{pot['target_pct']:+.2f}%` до `{pot['target_level']}`")
+
+                # Pump/Dump info
+                if signal.get('pump_dump'):
+                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                    lines.append(f"🚀 *ПАМП/ДАМП:*")
+                    for pd_info in signal['pump_dump'][:3]:
+                        ptype = pd_info.get('type', 'unknown').upper()
+                        pchange = pd_info.get('change_percent', 0)
+                        lines.append(f"└ {ptype}: `{pchange:+.1f}%`")
+
             detailed = "\n".join(lines)
-            
+
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔝 Вернуться к сигналу", callback_data=f"back_{coin}")
             ]])
-            
+
             return detailed, keyboard
-            
+
         except Exception as e:
-            logger.error(f"Ошибка детального анализа {symbol}: {e}")
-            return f"❌ Ошибка анализа: {e}", None
+            logger.error(f"Ошибка детального анализа {symbol}: {e}", exc_info=True)
+            return f"❌ Ошибка анализа: {e}", InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔝 Вернуться к сигналу", callback_data=f"back_{coin}")
+            ]])
     
     async def stats_updater_loop(self):
         while True:
