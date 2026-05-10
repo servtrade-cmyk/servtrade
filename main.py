@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple, Optional, Set
 import ccxt.async_support as ccxt
 from dotenv import load_dotenv
 # Telegram
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Bot, CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.error import RetryAfter, TimedOut
 import time
@@ -8221,7 +8221,7 @@ class FastPumpScanner:
         
         # Создаем простую клавиатуру
         keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton(f"📋 Копировать {coin}", callback_data=f"copy_{coin}")
+            InlineKeyboardButton(f"📋 Копировать {coin}", copy_text=CopyTextButton(text=coin))
         ]])
         
         # Отправляем в памп-группу
@@ -9081,7 +9081,7 @@ class FastPumpScanner:
         keyboard = []
         row1 = []
         if DISPLAY_SETTINGS['buttons']['copy']:
-            row1.append(InlineKeyboardButton(f"📋 Копировать {coin}", callback_data=f"copy_{coin}"))
+            row1.append(InlineKeyboardButton(f"📋 Копировать {coin}", copy_text=CopyTextButton(text=coin)))
         if DISPLAY_SETTINGS['buttons']['trade']:
             row1.append(InlineKeyboardButton(f"🚀 Торговать на {signal['exchange']}", url=REF_LINKS.get(signal['exchange'], '#')))
         if row1:
@@ -9714,7 +9714,7 @@ class MultiExchangeScannerBot:
         keyboard = []
         row1 = []
         if DISPLAY_SETTINGS['buttons']['copy']:
-            row1.append(InlineKeyboardButton(f"📋 Копировать {coin}", callback_data=f"copy_{coin}"))
+            row1.append(InlineKeyboardButton(f"📋 Копировать {coin}", copy_text=CopyTextButton(text=coin)))
         if DISPLAY_SETTINGS['buttons']['trade']:
             row1.append(InlineKeyboardButton(f"🚀 Торговать на BingX", url=REF_LINKS.get('BingX', '#')))
         if row1:
@@ -11122,7 +11122,7 @@ class TelegramHandler:
         self.app.add_handler(CommandHandler("health", self.health_command))
         self.app.add_handler(CommandHandler("export_db", self.export_db_command))
         self.app.add_handler(CallbackQueryHandler(self.stats_button_handler, pattern="^stats_"))
-        self.app.add_handler(CallbackQueryHandler(self.button, pattern="^(copy_|refresh_|details_|back_)"))
+        self.app.add_handler(CallbackQueryHandler(self.button, pattern="^(refresh_|details_|back_)"))
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
@@ -11475,17 +11475,7 @@ class TelegramHandler:
         data = query.data
         logger.info(f"🖱️ Нажата кнопка: {data}")
 
-        if data.startswith("copy_"):
-            coin = data.replace("copy_", "")
-            await query.answer()
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"<code>{coin}</code>",
-                parse_mode='HTML'
-            )
-            return
-
-        elif data.startswith("refresh_"):
+        if data.startswith("refresh_"):
             coin = data.replace("refresh_", "")
 
             if coin not in self.bot.last_signals:
