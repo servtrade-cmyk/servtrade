@@ -11477,20 +11477,12 @@ class TelegramHandler:
 
         if data.startswith("copy_"):
             coin = data.replace("copy_", "")
-            # Send coin name as copyable <code> tag in private message to user
-            try:
-                await context.bot.send_message(
-                    chat_id=update.effective_user.id,
-                    text=f"<code>{coin}</code>",
-                    parse_mode='HTML'
-                )
-                await query.answer(f"📋 {coin} отправлен в личные сообщения")
-            except Exception:
-                # User hasn't started private chat with bot
-                await query.answer(
-                    f"📋 {coin}\n\nЧтобы копировать в ЛС, напишите боту /start в личные сообщения",
-                    show_alert=True
-                )
+            await query.answer()
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"<code>{coin}</code>",
+                parse_mode='HTML'
+            )
             return
 
         elif data.startswith("refresh_"):
