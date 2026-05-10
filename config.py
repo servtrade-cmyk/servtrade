@@ -1537,7 +1537,6 @@ ENTRY_ZONES_GUARANTEED = {
         'timeframe': '15m',          # Один ТФ
         'zone_type': 'low',          # Минимумы
         'offset_candles': 3,         # Пропустить N свечей от текущей
-        'lookback': 192,             # ~48 часов на 15м (200 - offset)
         'max_zones': 3,              # Сколько зон показывать
         'min_distance_pct': 1.0,     # Мин. отступ между зонами (%)
     },
@@ -1545,7 +1544,6 @@ ENTRY_ZONES_GUARANTEED = {
         'timeframe': '15m',
         'zone_type': 'high',         # Максимумы
         'offset_candles': 3,         # Пропустить N свечей от текущей
-        'lookback': 192,             # ~48 часов на 15м (200 - offset)
         'max_zones': 3,
         'min_distance_pct': 0.3,
     },
