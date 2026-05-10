@@ -10855,8 +10855,8 @@ class MultiExchangeScannerBot:
                 lines.append(f"💰 *ТЕКУЩАЯ ЦЕНА:* `{current_price}`")
 
                 # RSI
-                if 'rsi' in df_15m.columns:
-                    rsi_val = df_15m['rsi'].iloc[-1]
+                if 'rsi' in df_15m.columns and pd.notna(df_15m['rsi'].iloc[-1]):
+                    rsi_val = float(df_15m['rsi'].iloc[-1])
                     rsi_emoji = "🔴" if rsi_val > 70 else "🟢" if rsi_val < 30 else "🟡"
                     rsi_zone = "перекуплен" if rsi_val > 70 else "перепродан" if rsi_val < 30 else "нейтральный"
                     lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
@@ -10864,9 +10864,9 @@ class MultiExchangeScannerBot:
                     lines.append(f"└ {rsi_emoji} RSI: `{rsi_val:.1f}` ({rsi_zone})")
 
                 # MACD
-                if 'macd' in df_15m.columns and 'macd_signal' in df_15m.columns:
-                    macd_val = df_15m['macd'].iloc[-1]
-                    macd_sig = df_15m['macd_signal'].iloc[-1]
+                if 'macd' in df_15m.columns and 'macd_signal' in df_15m.columns and pd.notna(df_15m['macd'].iloc[-1]):
+                    macd_val = float(df_15m['macd'].iloc[-1])
+                    macd_sig = float(df_15m['macd_signal'].iloc[-1])
                     macd_hist = macd_val - macd_sig
                     macd_dir = "бычий" if macd_hist > 0 else "медвежий"
                     macd_emoji = "🟢" if macd_hist > 0 else "🔴"
@@ -10877,8 +10877,8 @@ class MultiExchangeScannerBot:
                 ema_lines = []
                 for period in [21, 50, 200]:
                     col = f'ema_{period}'
-                    if col in df_15m.columns:
-                        ema_val = df_15m[col].iloc[-1]
+                    if col in df_15m.columns and pd.notna(df_15m[col].iloc[-1]):
+                        ema_val = float(df_15m[col].iloc[-1])
                         pos = "выше" if current_price > ema_val else "ниже"
                         diff_pct = ((current_price - ema_val) / ema_val) * 100
                         ema_lines.append(f"└ EMA {period}: `{ema_val:.6f}` (цена {pos}, {diff_pct:+.2f}%)")
@@ -10888,15 +10888,15 @@ class MultiExchangeScannerBot:
                     lines.extend(ema_lines)
 
                 # VWAP
-                if 'vwap' in df_15m.columns:
-                    vwap_val = df_15m['vwap'].iloc[-1]
+                if 'vwap' in df_15m.columns and pd.notna(df_15m['vwap'].iloc[-1]):
+                    vwap_val = float(df_15m['vwap'].iloc[-1])
                     vwap_pos = "выше" if current_price > vwap_val else "ниже"
                     lines.append(f"└ VWAP: `{vwap_val:.6f}` (цена {vwap_pos})")
 
                 # Bollinger Bands
-                if 'bb_upper' in df_15m.columns and 'bb_lower' in df_15m.columns:
-                    bb_upper = df_15m['bb_upper'].iloc[-1]
-                    bb_lower = df_15m['bb_lower'].iloc[-1]
+                if 'bb_upper' in df_15m.columns and 'bb_lower' in df_15m.columns and pd.notna(df_15m['bb_upper'].iloc[-1]):
+                    bb_upper = float(df_15m['bb_upper'].iloc[-1])
+                    bb_lower = float(df_15m['bb_lower'].iloc[-1])
                     bb_width = ((bb_upper - bb_lower) / current_price) * 100
                     bb_pos = "у верхней" if current_price > (bb_upper + bb_lower) / 2 else "у нижней"
                     lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
@@ -10917,8 +10917,8 @@ class MultiExchangeScannerBot:
                 lines.append(f"└ Соотношение: `{vol_ratio:.1f}x`")
 
                 # ATR (volatility)
-                if 'atr' in df_15m.columns:
-                    atr_val = df_15m['atr'].iloc[-1]
+                if 'atr' in df_15m.columns and pd.notna(df_15m['atr'].iloc[-1]):
+                    atr_val = float(df_15m['atr'].iloc[-1])
                     atr_pct = (atr_val / current_price) * 100
                     lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
                     lines.append(f"📐 *ВОЛАТИЛЬНОСТЬ:*")
@@ -10932,11 +10932,28 @@ class MultiExchangeScannerBot:
                 lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
                 lines.append(f"🎯 *СИГНАЛ:*")
                 lines.append(f"└ Направление: *{signal.get('direction', 'N/A')}*")
-                if signal.get('targets'):
+                # Targets as list of dicts (regular signals)
+                if signal.get('targets') and isinstance(signal['targets'], list):
                     for i, t in enumerate(signal['targets'][:3], 1):
-                        lines.append(f"└ Цель {i}: `{t['price']}` ({t['percent']:+.1f}%)")
-                if signal.get('stop_loss'):
-                    lines.append(f"└ Стоп-лосс: `{signal['stop_loss']['price']}` ({signal['stop_loss']['percent']:+.1f}%)")
+                        if isinstance(t, dict):
+                            lines.append(f"└ Цель {i}: `{t.get('price', '?')}` ({t.get('percent', 0):+.1f}%)")
+                        else:
+                            lines.append(f"└ Цель {i}: `{t}`")
+                # Targets as scalar values (pump signals)
+                if signal.get('target_1'):
+                    pct1 = ((signal['target_1'] - current_price) / current_price * 100) if current_price else 0
+                    lines.append(f"└ Цель 1: `{signal['target_1']}` ({pct1:+.1f}%)")
+                if signal.get('target_2'):
+                    pct2 = ((signal['target_2'] - current_price) / current_price * 100) if current_price else 0
+                    lines.append(f"└ Цель 2: `{signal['target_2']}` ({pct2:+.1f}%)")
+                # Stop-loss
+                sl = signal.get('stop_loss')
+                if sl:
+                    if isinstance(sl, dict):
+                        lines.append(f"└ Стоп-лосс: `{sl.get('price', '?')}` ({sl.get('percent', 0):+.1f}%)")
+                    else:
+                        sl_pct = ((sl - current_price) / current_price * 100) if current_price else 0
+                        lines.append(f"└ Стоп-лосс: `{sl}` ({sl_pct:+.1f}%)")
 
                 # Entry zones
                 if signal.get('entry_zones'):
@@ -10987,13 +11004,14 @@ class MultiExchangeScannerBot:
                         lines.append(f"└ Потенциал: `{pot['target_pct']:+.2f}%` до `{pot['target_level']}`")
 
                 # Pump/Dump info
-                if signal.get('pump_dump'):
+                if signal.get('pump_dump') and isinstance(signal['pump_dump'], list):
                     lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
                     lines.append(f"🚀 *ПАМП/ДАМП:*")
                     for pd_info in signal['pump_dump'][:3]:
-                        ptype = pd_info.get('type', 'unknown').upper()
-                        pchange = pd_info.get('change_percent', 0)
-                        lines.append(f"└ {ptype}: `{pchange:+.1f}%`")
+                        if isinstance(pd_info, dict):
+                            ptype = pd_info.get('type', 'unknown').upper()
+                            pchange = pd_info.get('change_percent', 0)
+                            lines.append(f"└ {ptype}: `{pchange:+.1f}%`")
 
             detailed = "\n".join(lines)
 
