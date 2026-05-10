@@ -11112,8 +11112,8 @@ class TelegramHandler:
         self.app.add_handler(CommandHandler("groups", self.groups_command))
         self.app.add_handler(CommandHandler("health", self.health_command))
         self.app.add_handler(CommandHandler("export_db", self.export_db_command))
-        self.app.add_handler(CallbackQueryHandler(self.button))
         self.app.add_handler(CallbackQueryHandler(self.stats_button_handler, pattern="^stats_"))
+        self.app.add_handler(CallbackQueryHandler(self.button, pattern="^(copy_|refresh_|details_|back_)"))
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
@@ -11539,6 +11539,20 @@ class TelegramHandler:
             logging.getLogger(name).addFilter(_ConflictFilter())
 
         await self.app.initialize()
+
+        # Register bot menu commands (shown when user types '/')
+        from telegram import BotCommand
+        await self.app.bot.set_my_commands([
+            BotCommand("start", "Запуск бота"),
+            BotCommand("scan", "Ручное сканирование"),
+            BotCommand("status", "Статус бота"),
+            BotCommand("stats", "Статистика сигналов"),
+            BotCommand("groups", "Информация о группах"),
+            BotCommand("health", "Проверка здоровья"),
+            BotCommand("export_db", "Экспорт базы данных"),
+            BotCommand("help", "Помощь"),
+        ])
+
         await self.app.updater.start_polling(drop_pending_updates=True)
         await self.app.start()
         logger.info("✅ Telegram polling запущен — команды бота активны")
