@@ -7928,6 +7928,7 @@ def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
     tf_display = ENTRY_ZONES_GUARANTEED.get('tf_display', {})
 
     zones = []
+    coin = signal.get('symbol', '?').split('/')[0].replace('USDT', '')
 
     if dataframes:
         # Try direct key first (e.g. '15m' added by _load_dataframes),
@@ -7956,6 +7957,10 @@ def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
                     vals = df_window['high']
                     vals = vals[vals > current_price * (1 + min_dist)]
 
+                logger.info(f"🟣 {coin} зоны добора: {direction}, цена={current_price}, "
+                            f"свечей={len(df_window)}, подходящих={len(vals)}, "
+                            f"min_dist={min_dist*100:.1f}%")
+
                 if len(vals) > 0:
                     sorted_vals = sorted(vals, reverse=is_long)
                     last_price = None
@@ -7966,9 +7971,16 @@ def _calculate_entry_zones(signal: Dict, dataframes: Dict = None) -> list:
                             last_price = price
                         if len(zones) >= max_zones:
                             break
+            else:
+                logger.info(f"🟣 {coin} зоны добора: пустое окно (offset={offset}, всего={len(df_tf)})")
+        else:
+            logger.info(f"🟣 {coin} зоны добора: нет данных для ТФ {tf_name}")
+    else:
+        logger.info(f"🟣 {coin} зоны добора: dataframes=None")
 
     # Fallback: percentage-based zones from current price
     if not zones and current_price > 0:
+        logger.info(f"🟣 {coin} зоны добора: FALLBACK на процентные зоны")
         pct_offsets = [0.01, 0.02, 0.03]
         for pct in pct_offsets[:max_zones]:
             if is_long:
@@ -11819,14 +11831,12 @@ class TelegramHandler:
             try:
                 signal = self.bot.last_signals[coin]['signal']
                 contract_info = None
-                dataframes = None
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
-                        dataframes = await self.bot._load_dataframes_for_symbol(fetcher, signal['symbol'])
                         break
-                msg, keyboard = self._format_signal(signal, contract_info, dataframes)
-                # Delete details message, send signal back with chart
+                # Use stored signal data directly — no need to reload all timeframes
+                msg, keyboard = self._format_signal(signal, contract_info, None)
                 await query.message.delete()
                 await self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard)
             except Exception as e:

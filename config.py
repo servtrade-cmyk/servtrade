@@ -1539,7 +1539,7 @@ ENTRY_ZONES_GUARANTEED = {
         'zone_type': 'low',          # Минимумы
         'offset_candles': 3,         # Пропустить N свечей от текущей
         'max_zones': 3,              # Сколько зон показывать
-        'min_distance_pct': 1.0,     # Мин. отступ между зонами (%)
+        'min_distance_pct': 0.3,     # Мин. отступ между зонами (%)
     },
     'short': {
         'timeframe': '15m',
