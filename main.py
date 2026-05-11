@@ -10851,11 +10851,10 @@ class MultiExchangeScannerBot:
 
             # Contract info
             contract_info = await fetcher.fetch_contract_info(symbol)
-            lines.append("━━━━━━━━━━━━━━━━━━━━")
             lines.append("⚡️ *ПАРАМЕТРЫ КОНТРАКТА:*")
-            lines.append(f"└ Макс. плечо: `{contract_info.get('max_leverage', 100)}x`")
-            lines.append(f"└ Мин. вход: `{contract_info.get('min_amount', 5):.2f} USDT`")
-            lines.append(f"└ Макс. вход: `{self.format_compact(contract_info.get('max_amount', 2_000_000))} USDT`")
+            lines.append(f"Макс. плечо: `{contract_info.get('max_leverage', 100)}x`")
+            lines.append(f"Мин. вход: `{contract_info.get('min_amount', 5):.2f} USDT`")
+            lines.append(f"Макс. вход: `{self.format_compact(contract_info.get('max_amount', 2_000_000))} USDT`")
 
             # Fetch current price data
             df_15m = await fetcher.fetch_ohlcv(symbol, '15m', limit=200)
@@ -10863,17 +10862,15 @@ class MultiExchangeScannerBot:
             if df_15m is not None and not df_15m.empty:
                 df_15m = self.analyzer.calculate_indicators(df_15m)
                 current_price = float(df_15m['close'].iloc[-1])
-                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"💰 *ТЕКУЩАЯ ЦЕНА:* `{current_price}`")
+                lines.append(f"\n💰 *ТЕКУЩАЯ ЦЕНА:* `{current_price}`")
 
                 # RSI
                 if 'rsi' in df_15m.columns and pd.notna(df_15m['rsi'].iloc[-1]):
                     rsi_val = float(df_15m['rsi'].iloc[-1])
                     rsi_emoji = "🔴" if rsi_val > 70 else "🟢" if rsi_val < 30 else "🟡"
                     rsi_zone = "перекуплен" if rsi_val > 70 else "перепродан" if rsi_val < 30 else "нейтральный"
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"📈 *ИНДИКАТОРЫ (15м):*")
-                    lines.append(f"└ {rsi_emoji} RSI: `{rsi_val:.1f}` ({rsi_zone})")
+                    lines.append(f"\n📈 *ИНДИКАТОРЫ (15м):*")
+                    lines.append(f"{rsi_emoji} RSI: `{rsi_val:.1f}` ({rsi_zone})")
 
                 # MACD
                 if 'macd' in df_15m.columns and 'macd_signal' in df_15m.columns and pd.notna(df_15m['macd'].iloc[-1]):
@@ -10882,8 +10879,8 @@ class MultiExchangeScannerBot:
                     macd_hist = macd_val - macd_sig
                     macd_dir = "бычий" if macd_hist > 0 else "медвежий"
                     macd_emoji = "🟢" if macd_hist > 0 else "🔴"
-                    lines.append(f"└ {macd_emoji} MACD: `{macd_val:.6f}` ({macd_dir})")
-                    lines.append(f"└ Signal: `{macd_sig:.6f}` | Hist: `{macd_hist:.6f}`")
+                    lines.append(f"{macd_emoji} MACD: `{macd_val:.6f}` ({macd_dir})")
+                    lines.append(f"Signal: `{macd_sig:.6f}` | Hist: `{macd_hist:.6f}`")
 
                 # EMA
                 ema_lines = []
@@ -10893,17 +10890,16 @@ class MultiExchangeScannerBot:
                         ema_val = float(df_15m[col].iloc[-1])
                         pos = "выше" if current_price > ema_val else "ниже"
                         diff_pct = ((current_price - ema_val) / ema_val) * 100
-                        ema_lines.append(f"└ EMA {period}: `{ema_val:.6f}` (цена {pos}, {diff_pct:+.2f}%)")
+                        ema_lines.append(f"EMA {period}: `{ema_val:.6f}` (цена {pos}, {diff_pct:+.2f}%)")
                 if ema_lines:
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"📏 *СКОЛЬЗЯЩИЕ СРЕДНИЕ:*")
+                    lines.append(f"\n📏 *СКОЛЬЗЯЩИЕ СРЕДНИЕ:*")
                     lines.extend(ema_lines)
 
                 # VWAP
                 if 'vwap' in df_15m.columns and pd.notna(df_15m['vwap'].iloc[-1]):
                     vwap_val = float(df_15m['vwap'].iloc[-1])
                     vwap_pos = "выше" if current_price > vwap_val else "ниже"
-                    lines.append(f"└ VWAP: `{vwap_val:.6f}` (цена {vwap_pos})")
+                    lines.append(f"VWAP: `{vwap_val:.6f}` (цена {vwap_pos})")
 
                 # Bollinger Bands
                 if 'bb_upper' in df_15m.columns and 'bb_lower' in df_15m.columns and pd.notna(df_15m['bb_upper'].iloc[-1]):
@@ -10911,78 +10907,72 @@ class MultiExchangeScannerBot:
                     bb_lower = float(df_15m['bb_lower'].iloc[-1])
                     bb_width = ((bb_upper - bb_lower) / current_price) * 100
                     bb_pos = "у верхней" if current_price > (bb_upper + bb_lower) / 2 else "у нижней"
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"📊 *BOLLINGER BANDS:*")
-                    lines.append(f"└ Верхняя: `{bb_upper:.6f}`")
-                    lines.append(f"└ Нижняя: `{bb_lower:.6f}`")
-                    lines.append(f"└ Ширина: `{bb_width:.2f}%` (цена {bb_pos})")
+                    lines.append(f"\n📊 *BOLLINGER BANDS:*")
+                    lines.append(f"Верхняя: `{bb_upper:.6f}`")
+                    lines.append(f"Нижняя: `{bb_lower:.6f}`")
+                    lines.append(f"Ширина: `{bb_width:.2f}%` (цена {bb_pos})")
 
                 # Volume
                 vol_current = float(df_15m['volume'].iloc[-1])
                 vol_avg = float(df_15m['volume'].tail(20).mean())
                 vol_ratio = vol_current / vol_avg if vol_avg > 0 else 0
                 vol_emoji = "🔥" if vol_ratio > 2 else "📊" if vol_ratio > 1 else "📉"
-                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"📦 *ОБЪЁМ:*")
-                lines.append(f"└ {vol_emoji} Текущий: `{self.format_compact(vol_current)}`")
-                lines.append(f"└ Средний (20): `{self.format_compact(vol_avg)}`")
-                lines.append(f"└ Соотношение: `{vol_ratio:.1f}x`")
+                lines.append(f"\n📦 *ОБЪЁМ:*")
+                lines.append(f"{vol_emoji} Текущий: `{self.format_compact(vol_current)}`")
+                lines.append(f"Средний (20): `{self.format_compact(vol_avg)}`")
+                lines.append(f"Соотношение: `{vol_ratio:.1f}x`")
 
                 # ATR (volatility)
                 if 'atr' in df_15m.columns and pd.notna(df_15m['atr'].iloc[-1]):
                     atr_val = float(df_15m['atr'].iloc[-1])
                     atr_pct = (atr_val / current_price) * 100
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"📐 *ВОЛАТИЛЬНОСТЬ:*")
-                    lines.append(f"└ ATR: `{atr_val:.6f}` ({atr_pct:.2f}%)")
+                    lines.append(f"\n📐 *ВОЛАТИЛЬНОСТЬ:*")
+                    lines.append(f"ATR: `{atr_val:.6f}` ({atr_pct:.2f}%)")
 
             # Signal data (reasons, targets, zones)
             if coin in self.last_signals:
                 signal = self.last_signals[coin]['signal']
 
                 # Direction and targets
-                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"🎯 *СИГНАЛ:*")
-                lines.append(f"└ Направление: *{signal.get('direction', 'N/A')}*")
+                lines.append(f"\n🎯 *СИГНАЛ:*")
+                lines.append(f"Направление: *{signal.get('direction', 'N/A')}*")
                 # Targets as list of dicts (regular signals)
                 if signal.get('targets') and isinstance(signal['targets'], list):
                     for i, t in enumerate(signal['targets'][:3], 1):
                         if isinstance(t, dict):
-                            lines.append(f"└ Цель {i}: `{t.get('price', '?')}` ({t.get('percent', 0):+.1f}%)")
+                            lines.append(f"Цель {i}: `{t.get('price', '?')}` ({t.get('percent', 0):+.1f}%)")
                         else:
-                            lines.append(f"└ Цель {i}: `{t}`")
+                            lines.append(f"Цель {i}: `{t}`")
                 # Targets as scalar values (pump signals)
                 if signal.get('target_1'):
                     pct1 = ((signal['target_1'] - current_price) / current_price * 100) if current_price else 0
-                    lines.append(f"└ Цель 1: `{signal['target_1']}` ({pct1:+.1f}%)")
+                    lines.append(f"Цель 1: `{signal['target_1']}` ({pct1:+.1f}%)")
                 if signal.get('target_2'):
                     pct2 = ((signal['target_2'] - current_price) / current_price * 100) if current_price else 0
-                    lines.append(f"└ Цель 2: `{signal['target_2']}` ({pct2:+.1f}%)")
+                    lines.append(f"Цель 2: `{signal['target_2']}` ({pct2:+.1f}%)")
                 # Stop-loss
                 sl = signal.get('stop_loss')
                 if sl:
                     if isinstance(sl, dict):
-                        lines.append(f"└ Стоп-лосс: `{sl.get('price', '?')}` ({sl.get('percent', 0):+.1f}%)")
+                        lines.append(f"Стоп-лосс: `{sl.get('price', '?')}` ({sl.get('percent', 0):+.1f}%)")
                     else:
                         sl_pct = ((sl - current_price) / current_price * 100) if current_price else 0
-                        lines.append(f"└ Стоп-лосс: `{sl}` ({sl_pct:+.1f}%)")
+                        lines.append(f"Стоп-лосс: `{sl}` ({sl_pct:+.1f}%)")
 
                 # Entry zones
                 if signal.get('entry_zones'):
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"🟣 *ЗОНЫ ДОБОРА:*")
+                    lines.append(f"\n🟣 *ЗОНЫ ДОБОРА:*")
                     for zone in signal['entry_zones']:
                         if isinstance(zone, dict):
-                            lines.append(f"└ `{zone.get('price', zone)}` ({zone.get('tf', '')})")
+                            lines.append(f"`{zone.get('price', zone)}` ({zone.get('tf', '')})")
                         else:
-                            lines.append(f"└ `{zone}`")
+                            lines.append(f"`{zone}`")
 
                 # Reasons
-                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                lines.append(f"💡 *ВСЕ ПРИЧИНЫ СИГНАЛА:*")
+                lines.append(f"\n💡 *ВСЕ ПРИЧИНЫ СИГНАЛА:*")
                 for reason in signal.get('reasons', []):
                     clean = reason.replace("📊 ", "").replace("✅ ", "").replace("🔄 ", "").replace("📈 ", "").replace("📉 ", "").replace("📦 📦", "📦").replace("📦 ", "")
-                    lines.append(f"└ {clean}")
+                    lines.append(f"• {clean}")
 
                 # Fibonacci
                 if 'fibonacci' in signal and signal['fibonacci']:
@@ -10990,35 +10980,33 @@ class MultiExchangeScannerBot:
                     fib_levels = fib.get('levels', {})
                     fib_signals = fib.get('signals', [])
                     if fib_levels or fib_signals:
-                        lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                        lines.append(f"📐 *ФИБОНАЧЧИ:*")
+                        lines.append(f"\n📐 *ФИБОНАЧЧИ:*")
                         tf_names = {'current': '15м', 'hourly': '1ч', 'four_hourly': '4ч', 'daily': '1д', 'weekly': '1н', '30m': '30м'}
                         for tf, lvls in fib_levels.items():
                             tf_display = tf_names.get(tf, tf).upper()
                             if isinstance(lvls, dict):
-                                lines.append(f"└ *{tf_display}:* {len(lvls)} уровней")
+                                lines.append(f"*{tf_display}:* {len(lvls)} уровней")
                                 for key, lvl_data in list(lvls.items())[:5]:
                                     if isinstance(lvl_data, dict):
-                                        lines.append(f"   • {lvl_data.get('description', key)}: `{lvl_data.get('price', 0):.6f}`")
+                                        lines.append(f"  {lvl_data.get('description', key)}: `{lvl_data.get('price', 0):.6f}`")
                             elif isinstance(lvls, list):
-                                lines.append(f"└ *{tf_display}:* {len(lvls)} уровней")
+                                lines.append(f"*{tf_display}:* {len(lvls)} уровней")
                                 for lvl in lvls[:5]:
                                     if isinstance(lvl, dict):
-                                        lines.append(f"   • `{lvl.get('level', '')}`: `{lvl.get('price', '')}`")
+                                        lines.append(f"  `{lvl.get('level', '')}`: `{lvl.get('price', '')}`")
                         for sig in fib_signals[:3]:
-                            lines.append(f"└ {sig}")
+                            lines.append(f"• {sig}")
 
                 # Volume Profile
                 if 'volume_profile' in signal and signal['volume_profile']:
                     vp_levels = signal['volume_profile'].get('levels', {})
                     if vp_levels:
-                        lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                        lines.append(f"📊 *VOLUME PROFILE:*")
+                        lines.append(f"\n📊 *VOLUME PROFILE:*")
                         for tf, vp in vp_levels.items():
                             if isinstance(vp, dict):
-                                lines.append(f"└ *{tf.upper()}:* POC=`{vp.get('poc', 0):.6f}`")
+                                lines.append(f"*{tf.upper()}:* POC=`{vp.get('poc', 0):.6f}`")
                                 if 'vah' in vp:
-                                    lines.append(f"   • VAH: `{vp['vah']:.6f}` | VAL: `{vp.get('val', 0):.6f}`")
+                                    lines.append(f"  VAH: `{vp['vah']:.6f}` | VAL: `{vp.get('val', 0):.6f}`")
 
                 # Accumulation — only show when there's actual data
                 if 'accumulation' in signal and signal['accumulation']:
@@ -11026,23 +11014,21 @@ class MultiExchangeScannerBot:
                     acc_signals = acc.get('signals', [])
                     acc_potential = acc.get('potential', {})
                     if acc_signals or acc_potential.get('has_potential'):
-                        lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                        lines.append(f"📦 *НАКОПЛЕНИЕ:*")
+                        lines.append(f"\n📦 *НАКОПЛЕНИЕ:*")
                         for sig in acc_signals[:5]:
-                            lines.append(f"└ {sig}")
+                            lines.append(f"• {sig}")
                         if acc_potential.get('has_potential'):
-                            lines.append(f"└ Потенциал: `{acc_potential['target_pct']:+.2f}%` до `{acc_potential['target_level']}`")
+                            lines.append(f"Потенциал: `{acc_potential['target_pct']:+.2f}%` до `{acc_potential['target_level']}`")
 
                 # Pump/Dump info
                 if signal.get('pump_dump') and isinstance(signal['pump_dump'], list):
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"🚀 *ПАМП/ДАМП:*")
+                    lines.append(f"\n🚀 *ПАМП/ДАМП:*")
                     for pd_info in signal['pump_dump'][:3]:
                         if isinstance(pd_info, dict):
                             pchange = pd_info.get('change_percent', 0)
                             ptype = 'ПАМП' if pchange > 0 else 'ДАМП'
                             time_window = pd_info.get('time_window', 0)
-                            lines.append(f"└ {ptype}: `{pchange:+.1f}%` за {time_window}с")
+                            lines.append(f"{ptype}: `{pchange:+.1f}%` за {time_window}с")
 
             detailed = "\n".join(lines)
 
@@ -11778,15 +11764,32 @@ class TelegramHandler:
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
-                        dataframes = await self.bot._load_dataframes_for_symbol(fetcher, signal['symbol'])
+                        # Only load 15m for zones — no need for all timeframes
+                        tf_15m = TIMEFRAMES.get('current', '15m')
+                        df = await fetcher.fetch_ohlcv(signal['symbol'], tf_15m, limit=200)
+                        if df is not None and not df.empty:
+                            df = self.bot.analyzer.calculate_indicators(df)
+                            dataframes = {'current': df, '15m': df}
                         break
 
                 msg, keyboard = self._format_signal(signal, contract_info, dataframes)
 
                 await query.message.delete()
-                await self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard)
+                try:
+                    await asyncio.wait_for(
+                        self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard),
+                        timeout=15
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"⏰ Таймаут графика {coin}, отправляю без графика")
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=msg,
+                        parse_mode='HTML',
+                        reply_markup=keyboard
+                    )
             except Exception as e:
-                logger.error(f"❌ Ошибка обновления сигнала {coin}: {e}")
+                logger.error(f"❌ Ошибка обновления сигнала {coin}: {e}", exc_info=True)
                 await query.answer(f"❌ Ошибка: {e}", show_alert=True)
             return
 
@@ -11835,12 +11838,23 @@ class TelegramHandler:
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
                         break
-                # Use stored signal data directly — no need to reload all timeframes
                 msg, keyboard = self._format_signal(signal, contract_info, None)
                 await query.message.delete()
-                await self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard)
+                try:
+                    await asyncio.wait_for(
+                        self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard),
+                        timeout=15
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"⏰ Таймаут графика {coin}, отправляю без графика")
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=msg,
+                        parse_mode='HTML',
+                        reply_markup=keyboard
+                    )
             except Exception as e:
-                logger.error(f"❌ Ошибка возврата {coin}: {e}")
+                logger.error(f"❌ Ошибка возврата {coin}: {e}", exc_info=True)
                 await query.answer(f"❌ Ошибка: {e}", show_alert=True)
             return
     
