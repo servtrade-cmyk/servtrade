@@ -152,35 +152,48 @@ class SignalStatistics:
 
         # Определяем направление (LONG или SHORT)
         is_long = 'LONG' in signal['direction'] and 'SHORT' not in signal['direction']
-        
+
+        entry = signal['entry_price']
+        t1 = signal['target_1']
+        t2 = signal['target_2']
+        sl = signal['stop_loss']
+
+        # Auto-detect actual direction from targets vs entry price
+        # (protects against direction/targets mismatch from signal mutation)
+        if t1 and t2:
+            if t1 > entry and t2 > entry:
+                is_long = True
+            elif t1 < entry and t2 < entry:
+                is_long = False
+
         if is_long:
             # Для LONG: цели выше, стоп ниже
-            if signal['target_2'] and current_price >= signal['target_2']:
+            if t2 and current_price >= t2:
                 signal['status'] = 'victory'
                 signal['final_result'] = 'target_2_hit'
-                profit_pct = ((signal['target_2'] - signal['entry_price']) / signal['entry_price']) * 100
-            elif signal['target_1'] and current_price >= signal['target_1']:
+                profit_pct = abs((t2 - entry) / entry) * 100
+            elif t1 and current_price >= t1:
                 signal['status'] = 'profit'
                 signal['final_result'] = 'target_1_hit'
-                profit_pct = ((signal['target_1'] - signal['entry_price']) / signal['entry_price']) * 100
-            elif signal['stop_loss'] and current_price <= signal['stop_loss']:
+                profit_pct = abs((t1 - entry) / entry) * 100
+            elif sl and current_price <= sl:
                 signal['status'] = 'loss'
                 signal['final_result'] = 'stop_loss'
-                profit_pct = ((signal['stop_loss'] - signal['entry_price']) / signal['entry_price']) * 100
+                profit_pct = -abs((sl - entry) / entry) * 100
         else:
             # Для SHORT: цели ниже, стоп выше
-            if signal['target_2'] and current_price <= signal['target_2']:
+            if t2 and current_price <= t2:
                 signal['status'] = 'victory'
                 signal['final_result'] = 'target_2_hit'
-                profit_pct = ((signal['entry_price'] - signal['target_2']) / signal['entry_price']) * 100
-            elif signal['target_1'] and current_price <= signal['target_1']:
+                profit_pct = abs((entry - t2) / entry) * 100
+            elif t1 and current_price <= t1:
                 signal['status'] = 'profit'
                 signal['final_result'] = 'target_1_hit'
-                profit_pct = ((signal['entry_price'] - signal['target_1']) / signal['entry_price']) * 100
-            elif signal['stop_loss'] and current_price >= signal['stop_loss']:
+                profit_pct = abs((entry - t1) / entry) * 100
+            elif sl and current_price >= sl:
                 signal['status'] = 'loss'
                 signal['final_result'] = 'stop_loss'
-                profit_pct = ((signal['entry_price'] - signal['stop_loss']) / signal['entry_price']) * 100
+                profit_pct = -abs((entry - sl) / entry) * 100
         
         signal['profit_percent'] = round(profit_pct, 2)
         signal['updated_at'] = datetime.now().isoformat()
