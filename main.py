@@ -10969,39 +10969,57 @@ class MultiExchangeScannerBot:
                 lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
                 lines.append(f"💡 *ВСЕ ПРИЧИНЫ СИГНАЛА:*")
                 for reason in signal.get('reasons', []):
-                    clean = reason.replace("📊 ", "").replace("✅ ", "").replace("🔄 ", "").replace("📈 ", "").replace("📉 ", "")
+                    clean = reason.replace("📊 ", "").replace("✅ ", "").replace("🔄 ", "").replace("📈 ", "").replace("📉 ", "").replace("📦 📦", "📦").replace("📦 ", "")
                     lines.append(f"└ {clean}")
 
                 # Fibonacci
-                if 'fibonacci' in signal:
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"📐 *ФИБОНАЧЧИ:*")
+                if 'fibonacci' in signal and signal['fibonacci']:
                     fib = signal['fibonacci']
-                    for tf, levels in fib.get('levels', {}).items():
-                        lines.append(f"└ *{tf.upper()}:* {len(levels)} уровней")
-                        for lvl in levels[:5]:
-                            if isinstance(lvl, dict):
-                                lines.append(f"   • `{lvl.get('level', '')}`: `{lvl.get('price', '')}`")
+                    fib_levels = fib.get('levels', {})
+                    fib_signals = fib.get('signals', [])
+                    if fib_levels or fib_signals:
+                        lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                        lines.append(f"📐 *ФИБОНАЧЧИ:*")
+                        tf_names = {'current': '15м', 'hourly': '1ч', 'four_hourly': '4ч', 'daily': '1д', 'weekly': '1н', '30m': '30м'}
+                        for tf, lvls in fib_levels.items():
+                            tf_display = tf_names.get(tf, tf).upper()
+                            if isinstance(lvls, dict):
+                                lines.append(f"└ *{tf_display}:* {len(lvls)} уровней")
+                                for key, lvl_data in list(lvls.items())[:5]:
+                                    if isinstance(lvl_data, dict):
+                                        lines.append(f"   • {lvl_data.get('description', key)}: `{lvl_data.get('price', 0):.6f}`")
+                            elif isinstance(lvls, list):
+                                lines.append(f"└ *{tf_display}:* {len(lvls)} уровней")
+                                for lvl in lvls[:5]:
+                                    if isinstance(lvl, dict):
+                                        lines.append(f"   • `{lvl.get('level', '')}`: `{lvl.get('price', '')}`")
+                        for sig in fib_signals[:3]:
+                            lines.append(f"└ {sig}")
 
                 # Volume Profile
-                if 'volume_profile' in signal:
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"📊 *VOLUME PROFILE:*")
-                    for tf, vp in signal['volume_profile'].get('levels', {}).items():
-                        lines.append(f"└ *{tf.upper()}:* POC=`{vp.get('poc', 0):.6f}`")
-                        if 'vah' in vp:
-                            lines.append(f"   • VAH: `{vp['vah']:.6f}` | VAL: `{vp.get('val', 0):.6f}`")
+                if 'volume_profile' in signal and signal['volume_profile']:
+                    vp_levels = signal['volume_profile'].get('levels', {})
+                    if vp_levels:
+                        lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                        lines.append(f"📊 *VOLUME PROFILE:*")
+                        for tf, vp in vp_levels.items():
+                            if isinstance(vp, dict):
+                                lines.append(f"└ *{tf.upper()}:* POC=`{vp.get('poc', 0):.6f}`")
+                                if 'vah' in vp:
+                                    lines.append(f"   • VAH: `{vp['vah']:.6f}` | VAL: `{vp.get('val', 0):.6f}`")
 
-                # Accumulation
-                if 'accumulation' in signal:
-                    lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
-                    lines.append(f"📦 *НАКОПЛЕНИЕ:*")
+                # Accumulation — only show when there's actual data
+                if 'accumulation' in signal and signal['accumulation']:
                     acc = signal['accumulation']
-                    for sig in acc.get('signals', [])[:5]:
-                        lines.append(f"└ {sig}")
-                    if acc.get('potential', {}).get('has_potential'):
-                        pot = acc['potential']
-                        lines.append(f"└ Потенциал: `{pot['target_pct']:+.2f}%` до `{pot['target_level']}`")
+                    acc_signals = acc.get('signals', [])
+                    acc_potential = acc.get('potential', {})
+                    if acc_signals or acc_potential.get('has_potential'):
+                        lines.append(f"\n━━━━━━━━━━━━━━━━━━━━")
+                        lines.append(f"📦 *НАКОПЛЕНИЕ:*")
+                        for sig in acc_signals[:5]:
+                            lines.append(f"└ {sig}")
+                        if acc_potential.get('has_potential'):
+                            lines.append(f"└ Потенциал: `{acc_potential['target_pct']:+.2f}%` до `{acc_potential['target_level']}`")
 
                 # Pump/Dump info
                 if signal.get('pump_dump') and isinstance(signal['pump_dump'], list):
@@ -11009,9 +11027,10 @@ class MultiExchangeScannerBot:
                     lines.append(f"🚀 *ПАМП/ДАМП:*")
                     for pd_info in signal['pump_dump'][:3]:
                         if isinstance(pd_info, dict):
-                            ptype = pd_info.get('type', 'unknown').upper()
                             pchange = pd_info.get('change_percent', 0)
-                            lines.append(f"└ {ptype}: `{pchange:+.1f}%`")
+                            ptype = 'ПАМП' if pchange > 0 else 'ДАМП'
+                            time_window = pd_info.get('time_window', 0)
+                            lines.append(f"└ {ptype}: `{pchange:+.1f}%` за {time_window}с")
 
             detailed = "\n".join(lines)
 
