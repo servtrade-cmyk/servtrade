@@ -9129,12 +9129,15 @@ class FastPumpScanner:
 # ============== ОСНОВНОЙ КЛАСС БОТА ==============
 
 class MultiExchangeScannerBot:
+    # File path for persisting last_signals across restarts
+    _SIGNALS_FILE = os.getenv('SIGNALS_CACHE_PATH', '/tmp/last_signals.json')
+
     def __init__(self):
         self.fetchers = {}
         self.analyzer = MultiTimeframeAnalyzer()
         self.chart_generator = ChartGenerator()
         self.telegram_bot = Bot(token=TELEGRAM_TOKEN)
-        self.last_signals = {}
+        self.last_signals = self._load_signals()
         self.accumulation_alerts_sent = set()
         self.breakout_tracker = BreakoutTracker()
         self.fakeout_detector = FakeoutDetector()
@@ -9390,6 +9393,48 @@ class MultiExchangeScannerBot:
             return new_signal if should_send else None
         
         return None
+
+    def _save_signals(self):
+        """Save last_signals to disk so buttons work after restart."""
+        try:
+            def _serialize(obj):
+                if isinstance(obj, datetime):
+                    return {'__datetime__': obj.isoformat()}
+                if isinstance(obj, (np.integer,)):
+                    return int(obj)
+                if isinstance(obj, (np.floating,)):
+                    return float(obj)
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                if isinstance(obj, np.bool_):
+                    return bool(obj)
+                if hasattr(obj, 'item'):
+                    return obj.item()
+                raise TypeError(f"Not serializable: {type(obj)}")
+
+            with open(self._SIGNALS_FILE, 'w') as f:
+                json.dump(self.last_signals, f, default=_serialize, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"⚠️ Не удалось сохранить сигналы: {e}")
+
+    def _load_signals(self) -> dict:
+        """Load last_signals from disk on startup."""
+        try:
+            if not os.path.exists(self._SIGNALS_FILE):
+                return {}
+
+            def _deserialize(dct):
+                if '__datetime__' in dct:
+                    return datetime.fromisoformat(dct['__datetime__'])
+                return dct
+
+            with open(self._SIGNALS_FILE, 'r') as f:
+                data = json.load(f, object_hook=_deserialize)
+            logger.info(f"✅ Загружено {len(data)} сохраненных сигналов")
+            return data
+        except Exception as e:
+            logger.warning(f"⚠️ Не удалось загрузить сигналы: {e}")
+            return {}
 
     def extract_coin(self, symbol: str) -> str:
         if '/USDT' in symbol:
@@ -9978,6 +10023,7 @@ class MultiExchangeScannerBot:
             'signal': signal,
             'time': current_time
         }
+        self._save_signals()
         
         contract_info = None
         df = None
@@ -10095,6 +10141,7 @@ class MultiExchangeScannerBot:
             'signal': signal,
             'time': current_time
         }
+        self._save_signals()
         
         df = None
         for fetcher in self.fetchers.values():
@@ -10815,6 +10862,7 @@ class MultiExchangeScannerBot:
             'signal': signal,
             'time': datetime.now()
         }
+        self._save_signals()
 
         # Сигнал 1: "В накоплении" (один раз)
         if ACCUMULATION_SETTINGS.get('send_accumulation_alert_once', True):
@@ -11751,7 +11799,7 @@ class TelegramHandler:
             coin = data.replace("refresh_", "")
 
             if coin not in self.bot.last_signals:
-                await query.answer(f"❌ Сигнал {coin} не найден (бот был перезапущен?)", show_alert=True)
+                await query.answer(f"❌ Сигнал {coin} устарел. Дождитесь нового сигнала.", show_alert=True)
                 return
 
             await query.answer("🔄 Обновляю...")
@@ -11796,7 +11844,7 @@ class TelegramHandler:
         elif data.startswith("details_"):
             coin = data.replace("details_", "")
             if coin not in self.bot.last_signals:
-                await query.answer(f"❌ Сигнал {coin} не найден (бот был перезапущен?)", show_alert=True)
+                await query.answer(f"❌ Сигнал {coin} устарел. Дождитесь нового сигнала.", show_alert=True)
                 return
 
             await query.answer("📊 Загружаю...")
@@ -11827,7 +11875,7 @@ class TelegramHandler:
         elif data.startswith("back_"):
             coin = data.replace("back_", "")
             if coin not in self.bot.last_signals:
-                await query.answer(f"❌ Сигнал {coin} не найден (бот был перезапущен?)", show_alert=True)
+                await query.answer(f"❌ Сигнал {coin} устарел. Дождитесь нового сигнала.", show_alert=True)
                 return
 
             await query.answer("↩️ Возврат...")
