@@ -11752,14 +11752,17 @@ class TelegramHandler:
         )
     
     def _format_signal(self, signal, contract_info, dataframes):
-        """Choose correct formatter based on signal type."""
-        sig_type = signal.get('signal_type', '')
+        """Choose correct formatter based on signal type.
+        Uses a deep copy so formatters don't mutate the stored signal."""
+        import copy
+        sig = copy.deepcopy(signal)
+        sig_type = sig.get('signal_type', '')
         if sig_type in ('PUMP', 'DUMP', 'PUMP_BREAKOUT', 'DUMP_BREAKOUT'):
-            return self.bot.format_pump_message(signal, contract_info, dataframes=dataframes)
+            return self.bot.format_pump_message(sig, contract_info, dataframes=dataframes)
         pump_percent = None
-        if signal.get('pump_dump') and len(signal['pump_dump']) > 0:
-            pump_percent = signal['pump_dump'][0].get('change_percent')
-        return self.bot.format_message(signal, contract_info, pump_percent, dataframes=dataframes)
+        if sig.get('pump_dump') and len(sig['pump_dump']) > 0:
+            pump_percent = sig['pump_dump'][0].get('change_percent')
+        return self.bot.format_message(sig, contract_info, pump_percent, dataframes=dataframes)
 
     async def _send_signal_with_chart(self, context, chat_id, signal, coin, msg, keyboard):
         """Send signal message with chart. Returns True if chart was sent."""
@@ -11812,7 +11815,6 @@ class TelegramHandler:
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
-                        # Only load 15m for zones — no need for all timeframes
                         tf_15m = TIMEFRAMES.get('current', '15m')
                         df = await fetcher.fetch_ohlcv(signal['symbol'], tf_15m, limit=200)
                         if df is not None and not df.empty:
@@ -11822,7 +11824,7 @@ class TelegramHandler:
 
                 msg, keyboard = self._format_signal(signal, contract_info, dataframes)
 
-                await query.message.delete()
+                # Send new message first, then delete old one
                 try:
                     await asyncio.wait_for(
                         self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard),
@@ -11836,9 +11838,16 @@ class TelegramHandler:
                         parse_mode='HTML',
                         reply_markup=keyboard
                     )
+                try:
+                    await query.message.delete()
+                except Exception:
+                    pass
             except Exception as e:
                 logger.error(f"❌ Ошибка обновления сигнала {coin}: {e}", exc_info=True)
-                await query.answer(f"❌ Ошибка: {e}", show_alert=True)
+                try:
+                    await query.answer(f"❌ Ошибка: {e}", show_alert=True)
+                except Exception:
+                    pass
             return
 
         elif data.startswith("details_"):
@@ -11851,7 +11860,13 @@ class TelegramHandler:
             try:
                 signal_data = self.bot.last_signals[coin]
                 signal = signal_data['signal']
-                signal_time = signal_data['time'].strftime('%Y-%m-%d %H:%M:%S')
+                sig_time = signal_data.get('time')
+                if isinstance(sig_time, datetime):
+                    signal_time = sig_time.strftime('%Y-%m-%d %H:%M:%S')
+                elif isinstance(sig_time, str):
+                    signal_time = sig_time
+                else:
+                    signal_time = 'N/A'
 
                 for fetcher in self.bot.fetchers.values():
                     if fetcher.name == signal['exchange']:
@@ -11887,7 +11902,7 @@ class TelegramHandler:
                         contract_info = await fetcher.fetch_contract_info(signal['symbol'])
                         break
                 msg, keyboard = self._format_signal(signal, contract_info, None)
-                await query.message.delete()
+                # Send new message first, then delete old one
                 try:
                     await asyncio.wait_for(
                         self._send_signal_with_chart(context, update.effective_chat.id, signal, coin, msg, keyboard),
@@ -11901,9 +11916,16 @@ class TelegramHandler:
                         parse_mode='HTML',
                         reply_markup=keyboard
                     )
+                try:
+                    await query.message.delete()
+                except Exception:
+                    pass
             except Exception as e:
                 logger.error(f"❌ Ошибка возврата {coin}: {e}", exc_info=True)
-                await query.answer(f"❌ Ошибка: {e}", show_alert=True)
+                try:
+                    await query.answer(f"❌ Ошибка: {e}", show_alert=True)
+                except Exception:
+                    pass
             return
     
     async def start_polling(self):
